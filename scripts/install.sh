@@ -176,7 +176,7 @@ _B = """\
 
     return err;"""
 
-if _B[:30] in s1:
+if "sw_reg1" in s1:
     pass
 elif _A in s1:
     s1 = s1.replace(_A, _B, 1)
