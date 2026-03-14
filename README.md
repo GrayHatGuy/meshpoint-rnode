@@ -9,6 +9,8 @@
 
 ![Meshradar Dashboard](dashboard.png)
 
+![Meshpoint Terminal](docs/meshpoint-terminal-banner.png)
+
 A Meshpoint is a Raspberry Pi with an SX1302 concentrator that listens on **8 LoRa channels simultaneously** and decodes everything it hears. It's not a node on the mesh -- it's a passive observer that sees all traffic across all spreading factors at once.
 
 Packets are captured, decrypted, stored locally, and shown on a real-time dashboard. Optionally, everything syncs upstream to [Meshradar](https://meshradar.io) for aggregated city-wide mesh intelligence.
@@ -34,11 +36,15 @@ Retired Helium miners with everything you need: Pi 4, RAK2287, Pi HAT, antenna, 
 
 [Find on eBay ($30-80)](https://www.ebay.com/sch/i.html?_nkw=RAK%20Hotspot%20V2%20%2F%20MNTD&_sacat=0&_from=R40&rt=nc&_udlo=30&_udhi=80)
 
+<img src="rak7248.png" width="360" alt="RAK7248 Hotspot V2">
+
 ### Option B: SenseCap M1 (~$40-60)
 
 Another Helium-era miner. Pi 4, WM1303 concentrator (SX1303), carrier board, antenna, enclosure. Auto-detected by the installer.
 
 [Find on eBay ($30-60)](https://www.ebay.com/sch/i.html?_nkw=SenseCap%20M1&_sacat=0&_from=R40&rt=nc&_udlo=30&_udhi=60)
+
+<img src="docs/sensecap-m1.png" width="360" alt="SenseCap M1">
 
 ### Option C: Build your own (~$85)
 
