@@ -21,14 +21,15 @@ class NodeRepository:
             """
             INSERT INTO nodes (
                 node_id, long_name, short_name, hardware_model,
-                firmware_version, protocol, latitude, longitude,
+                firmware_version, protocol, role, latitude, longitude,
                 altitude, last_heard, first_seen, packet_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(node_id) DO UPDATE SET
                 long_name = COALESCE(excluded.long_name, nodes.long_name),
                 short_name = COALESCE(excluded.short_name, nodes.short_name),
                 hardware_model = COALESCE(excluded.hardware_model, nodes.hardware_model),
                 firmware_version = COALESCE(excluded.firmware_version, nodes.firmware_version),
+                role = COALESCE(excluded.role, nodes.role),
                 latitude = COALESCE(excluded.latitude, nodes.latitude),
                 longitude = COALESCE(excluded.longitude, nodes.longitude),
                 altitude = COALESCE(excluded.altitude, nodes.altitude),
@@ -38,7 +39,7 @@ class NodeRepository:
             (
                 node.node_id, node.long_name, node.short_name,
                 node.hardware_model, node.firmware_version, node.protocol,
-                node.latitude, node.longitude, node.altitude,
+                node.role, node.latitude, node.longitude, node.altitude,
                 node.last_heard.isoformat(), node.first_seen.isoformat(),
                 node.packet_count,
             ),
@@ -69,6 +70,49 @@ class NodeRepository:
         )
         return [self._row_to_node(r) for r in rows]
 
+    async def get_all_with_signal(self, limit: int = 500) -> list[dict]:
+        """Return nodes with latest signal and telemetry from joined tables."""
+        rows = await self._db.fetch_all(
+            """
+            SELECT n.*,
+                   p.rssi AS latest_rssi,
+                   p.snr AS latest_snr,
+                   p.hop_limit AS latest_hop_limit,
+                   p.hop_start AS latest_hop_start,
+                   t.battery_level AS latest_battery,
+                   t.voltage AS latest_voltage
+            FROM nodes n
+            LEFT JOIN (
+                SELECT source_id,
+                       rssi, snr, hop_limit, hop_start,
+                       ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY timestamp DESC) AS rn
+                FROM packets
+            ) p ON p.source_id = n.node_id AND p.rn = 1
+            LEFT JOIN (
+                SELECT node_id,
+                       battery_level, voltage,
+                       ROW_NUMBER() OVER (PARTITION BY node_id ORDER BY timestamp DESC) AS rn
+                FROM telemetry
+            ) t ON t.node_id = n.node_id AND t.rn = 1
+            ORDER BY n.last_heard DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        results = []
+        for row in rows:
+            node = self._row_to_node(row)
+            node_dict = node.to_dict()
+            node_dict["latest_rssi"] = row.get("latest_rssi")
+            node_dict["latest_snr"] = row.get("latest_snr")
+            node_dict["latest_battery"] = row.get("latest_battery")
+            node_dict["latest_voltage"] = row.get("latest_voltage")
+            hop_start = row.get("latest_hop_start", 0) or 0
+            hop_limit = row.get("latest_hop_limit", 0) or 0
+            node_dict["latest_hops"] = max(0, hop_start - hop_limit)
+            results.append(node_dict)
+        return results
+
     async def increment_packet_count(self, node_id: str) -> None:
         await self._db.execute(
             "UPDATE nodes SET packet_count = packet_count + 1, last_heard = ? WHERE node_id = ?",
@@ -85,6 +129,7 @@ class NodeRepository:
             hardware_model=row.get("hardware_model"),
             firmware_version=row.get("firmware_version"),
             protocol=row.get("protocol", "meshtastic"),
+            role=row.get("role"),
             latitude=row.get("latitude"),
             longitude=row.get("longitude"),
             altitude=row.get("altitude"),

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     hardware_model TEXT,
     firmware_version TEXT,
     protocol      TEXT NOT NULL DEFAULT 'meshtastic',
+    role          TEXT,
     latitude      REAL,
     longitude     REAL,
     altitude      REAL,
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS telemetry (
 CREATE INDEX IF NOT EXISTS idx_packets_timestamp ON packets(timestamp);
 CREATE INDEX IF NOT EXISTS idx_packets_source ON packets(source_id);
 CREATE INDEX IF NOT EXISTS idx_packets_protocol ON packets(protocol);
+CREATE INDEX IF NOT EXISTS idx_packets_type ON packets(packet_type);
 CREATE INDEX IF NOT EXISTS idx_telemetry_node ON telemetry(node_id);
 CREATE INDEX IF NOT EXISTS idx_telemetry_timestamp ON telemetry(timestamp);
 """

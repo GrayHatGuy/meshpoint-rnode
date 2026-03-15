@@ -20,7 +20,9 @@ def init_routes(
 
 
 @router.get("")
-async def list_nodes(limit: int = 200):
+async def list_nodes(limit: int = 500, enrich: bool = True):
+    if enrich:
+        return await _node_repo.get_all_with_signal(limit)
     return [n.to_dict() for n in await _node_repo.get_all(limit)]
 
 

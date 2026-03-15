@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from src.analytics.network_mapper import NetworkMapper
 from src.analytics.signal_analyzer import SignalAnalyzer
 from src.analytics.traffic_monitor import TrafficMonitor
-from src.api.routes import analytics, device, nodes, packets, system_metrics
+from src.api.routes import analytics, device, nodes, packets, system_metrics, telemetry
 from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
@@ -72,6 +72,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(analytics.router)
     app.include_router(device.router)
     app.include_router(system_metrics.router)
+    app.include_router(telemetry.router)
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
@@ -140,8 +141,9 @@ def _init_routes(
 
     nodes.init_routes(coord.node_repo, network_mapper)
     packets.init_routes(coord.packet_repo)
-    analytics.init_routes(signal_analyzer, traffic_monitor)
+    analytics.init_routes(signal_analyzer, traffic_monitor, coord.packet_repo)
     device.init_routes(identity, ws_manager, coord.relay_manager)
+    telemetry.init_routes(coord.telemetry_repo)
 
 
 def _on_packet_received(packet: Packet) -> None:
