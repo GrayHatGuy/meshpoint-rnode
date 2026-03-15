@@ -27,18 +27,25 @@ class SimplePacketFeed {
         const sig = packet.signal || {};
         const rawRssi = sig.rssi != null ? sig.rssi : packet.rssi;
         const rawSnr = sig.snr != null ? sig.snr : packet.snr;
-        const rssi = rawRssi != null ? `${Number(rawRssi).toFixed(0)}` : '--';
+        const rssiVal = rawRssi != null ? Number(rawRssi).toFixed(0) : null;
+        const rssi = rssiVal != null ? rssiVal : '--';
         const snr = rawSnr != null ? `${Number(rawSnr).toFixed(1)}` : '--';
         const type = packet.packet_type || '--';
+        const protocol = packet.protocol || 'meshtastic';
         const details = this._summarize(packet);
+
+        const typeClass = `type-${type.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+        const protocolClass = `protocol-${protocol}`;
+        const rssiClass = this._rssiClass(rssiVal);
 
         tr.innerHTML = `
             <td>${time}</td>
-            <td style="font-family:var(--font-mono);font-size:0.7rem;">${srcShort}</td>
-            <td>${type}</td>
-            <td style="font-family:var(--font-mono);">${rssi}</td>
+            <td class="td-source">${srcShort}</td>
+            <td class="${protocolClass}">${protocol}</td>
+            <td class="${typeClass}">${type}</td>
+            <td class="${rssiClass}" style="font-family:var(--font-mono);">${rssi}</td>
             <td style="font-family:var(--font-mono);">${snr}</td>
-            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${this._esc(details)}</td>
+            <td class="${typeClass}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${this._esc(details)}</td>
         `;
 
         tr.addEventListener('click', () => this._toggleDetail(tr, packet));
@@ -67,7 +74,7 @@ class SimplePacketFeed {
         const detailTr = document.createElement('tr');
         detailTr.classList.add('packet-detail-row');
         const td = document.createElement('td');
-        td.colSpan = 6;
+        td.colSpan = 7;
         td.style.cssText = 'padding:0.5rem 0.75rem;font-size:0.7rem;font-family:var(--font-mono);color:var(--text-secondary);white-space:pre-wrap;word-break:break-word;background:var(--bg-secondary);';
 
         const payload = packet.decoded_payload;
@@ -105,6 +112,14 @@ class SimplePacketFeed {
             }
             default: return '--';
         }
+    }
+
+    _rssiClass(val) {
+        if (val == null) return '';
+        const n = Number(val);
+        if (n >= -90) return 'rssi-good';
+        if (n >= -110) return 'rssi-mid';
+        return 'rssi-bad';
     }
 
     _esc(str) {

@@ -282,6 +282,28 @@ body {
 .packet-table tr { transition: background 0.15s; }
 .packet-table tr:hover { background: rgba(6, 182, 212, 0.04); }
 
+.packet-table td.type-text { color: var(--accent-green); }
+.packet-table td.type-position { color: var(--accent-amber); }
+.packet-table td.type-telemetry { color: var(--accent-cyan); }
+.packet-table td.type-nodeinfo { color: var(--accent-purple); }
+.packet-table td.type-encrypted { color: var(--accent-red); }
+.packet-table td.type-routing { color: var(--text-muted); }
+.packet-table td.type-traceroute { color: var(--accent-blue); }
+.packet-table td.type-neighborinfo { color: var(--accent-blue); }
+
+.packet-table td.protocol-meshtastic { color: var(--accent-blue); }
+.packet-table td.protocol-meshcore { color: var(--accent-purple); }
+
+.packet-table td.rssi-good { color: var(--accent-green); }
+.packet-table td.rssi-mid { color: var(--accent-amber); }
+.packet-table td.rssi-bad { color: var(--accent-red); }
+
+.packet-table td.td-source {
+    color: var(--accent-cyan);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+}
+
 .packet-count {
     background: rgba(6, 182, 212, 0.15);
     color: var(--accent-cyan);
