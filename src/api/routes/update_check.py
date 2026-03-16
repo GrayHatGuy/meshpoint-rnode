@@ -2,36 +2,50 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
+import re
 import time
 
+import asyncio
+import urllib.request
+from functools import partial
+
 from fastapi import APIRouter
+
+from src.version import __version__
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/device", tags=["device"])
 
-MESHPOINT_DIR = "/opt/meshpoint"
-CACHE_TTL_SECONDS = 300
+_VERSION_URL = (
+    "https://raw.githubusercontent.com/KMX415/meshpoint/main/src/version.py"
+)
+_VERSION_RE = re.compile(r'__version__\s*=\s*["\']([^"\']+)["\']')
+_CACHE_TTL_SECONDS = 300
 
 _cache: dict[str, object] = {"result": None, "expires": 0}
 
 
-async def _git_output(*args: str) -> str | None:
+def _parse_version(version_str: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in version_str.split("."))
+
+
+def _fetch_remote_version_sync() -> str | None:
     try:
-        proc = await asyncio.create_subprocess_exec(
-            "git", *args,
-            cwd=MESHPOINT_DIR,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        if proc.returncode != 0:
-            return None
-        return stdout.decode().strip()
-    except OSError:
+        req = urllib.request.Request(_VERSION_URL, method="GET")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            text = resp.read().decode()
+            match = _VERSION_RE.search(text)
+            return match.group(1) if match else None
+    except Exception:
+        logger.debug("Failed to fetch remote version", exc_info=True)
         return None
+
+
+async def _fetch_remote_version() -> str | None:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _fetch_remote_version_sync)
 
 
 @router.get("/update-check")
@@ -40,25 +54,27 @@ async def update_check():
     if _cache["result"] and now < _cache["expires"]:
         return _cache["result"]
 
-    local_sha = await _git_output("rev-parse", "HEAD")
-    remote_raw = await _git_output("ls-remote", "origin", "HEAD")
-    remote_sha = remote_raw.split()[0] if remote_raw else None
+    remote_version = await _fetch_remote_version()
 
-    if not local_sha or not remote_sha:
+    if not remote_version:
         result = {
             "update_available": False,
-            "local_sha": local_sha,
-            "remote_sha": remote_sha,
+            "local_version": __version__,
+            "remote_version": None,
             "error": "Could not reach GitHub",
         }
     else:
+        try:
+            available = _parse_version(remote_version) > _parse_version(__version__)
+        except ValueError:
+            available = False
         result = {
-            "update_available": local_sha != remote_sha,
-            "local_sha": local_sha[:8],
-            "remote_sha": remote_sha[:8],
+            "update_available": available,
+            "local_version": __version__,
+            "remote_version": remote_version,
         }
 
     _cache["result"] = result
-    _cache["expires"] = now + CACHE_TTL_SECONDS
+    _cache["expires"] = now + _CACHE_TTL_SECONDS
 
     return result
