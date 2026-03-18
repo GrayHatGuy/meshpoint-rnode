@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="MP_logo.png" width="225" alt="Meshpoint Logo">
+  <img src="MP_logo.png" width="280" alt="Meshpoint Logo">
 </p>
 
 <h1 align="center">Meshpoint</h1>
