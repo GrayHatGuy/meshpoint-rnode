@@ -13,7 +13,6 @@
 [![GitHub stars](https://img.shields.io/github/stars/KMX415/meshpoint?style=flat&color=yellow)](https://github.com/KMX415/meshpoint/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/issues)
 [![Last commit](https://img.shields.io/github/last-commit/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/commits/main)
-[![Repo size](https://img.shields.io/github/repo-size/KMX415/meshpoint)](https://github.com/KMX415/meshpoint)
 [![Version](https://img.shields.io/badge/version-0.5.2-orange.svg)](https://github.com/KMX415/meshpoint#changelog)
 
 ![Meshradar Dashboard](dashboard.png)
