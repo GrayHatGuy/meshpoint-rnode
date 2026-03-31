@@ -10,6 +10,9 @@ radio:
 
 meshtastic:
   default_key_b64: "AQ=="
+  # channel_keys:
+  #   MyChannel: "base64encodedPSK=="
+  #   SecretChat: "anotherBase64PSK=="
   channel_keys: {}
 
 meshcore:
@@ -42,7 +45,7 @@ device:
   longitude: 0.0
   altitude: 25
   hardware_description: "RAK2287 + Raspberry Pi 4"
-  firmware_version: "0.5.2"
+  firmware_version: "0.5.3"
 
 relay:
   enabled: false

@@ -13,7 +13,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/KMX415/meshpoint?style=flat&color=yellow)](https://github.com/KMX415/meshpoint/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/issues)
 [![Last commit](https://img.shields.io/github/last-commit/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/commits/main)
-[![Version](https://img.shields.io/badge/version-0.5.2-orange.svg)](https://github.com/KMX415/meshpoint#changelog)
+[![Version](https://img.shields.io/badge/version-0.5.3-orange.svg)](https://github.com/KMX415/meshpoint#changelog)
 
 ![Meshradar Dashboard](dashboard.png)
 
@@ -190,6 +190,23 @@ upstream:
   url: "wss://api.meshradar.io/ws"
 ```
 
+### Private Channel Monitoring
+
+By default, the Meshpoint decrypts traffic on the standard Meshtastic default key (`AQ==`). To also decode packets on your private channels, add the channel keys to `config/local.yaml`:
+
+```yaml
+meshtastic:
+  channel_keys:
+    MyChannel: "base64encodedPSK=="
+    AnotherChannel: "anotherBase64PSK=="
+```
+
+The channel name must match exactly what's configured on your Meshtastic node (case-sensitive). To find your channel's base64 PSK, open the Meshtastic app, go to the channel settings, and copy the pre-shared key.
+
+Restart the service after adding keys: `sudo systemctl restart meshpoint`
+
+The Meshpoint tries each configured key when decoding a packet. Packets matching any configured key will be fully decoded. Packets on channels with unknown keys will continue to show as ENCRYPTED.
+
 ---
 
 ## Local API
@@ -233,6 +250,11 @@ See the [Onboarding Guide](docs/ONBOARDING.md#managing-your-mesh-point) for full
 ---
 
 ## Changelog
+
+### v0.5.3 (March 31, 2026)
+
+- **Multi-key decryption:** packets on private Meshtastic channels now decrypt when channel keys are configured in `local.yaml`. Previously only the default key was tried. ([#5](https://github.com/KMX415/meshpoint/issues/5))
+- **Heartbeat optimization:** reduced upstream heartbeat interval for lower cloud costs.
 
 ### v0.5.2 (March 31, 2026)
 

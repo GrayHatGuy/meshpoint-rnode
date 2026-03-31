@@ -38,7 +38,7 @@ class UpstreamClient:
     - Serialized sends via asyncio.Lock to prevent frame corruption
     """
 
-    HEARTBEAT_INTERVAL_SECONDS = 300  # 5 minutes
+    HEARTBEAT_INTERVAL_SECONDS = 540  # 9 minutes
     UPSTREAM_MAX_PACKETS_PER_MINUTE = 120
     UPSTREAM_BURST_SIZE = 20
 
