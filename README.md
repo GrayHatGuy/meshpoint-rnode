@@ -123,6 +123,8 @@ meshpoint status        # verify everything is running
 
 Open `http://<pi-ip>:8080` for the local dashboard.
 
+> **First time?** The [Onboarding Guide](docs/ONBOARDING.md) walks through everything from flashing the SD card to verifying your first captured packets.
+
 ---
 
 ## Architecture
