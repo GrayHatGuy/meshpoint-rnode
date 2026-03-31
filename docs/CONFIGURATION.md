@@ -77,6 +77,8 @@ meshtastic:
 
 The Meshpoint tries each configured key when decoding a packet. Packets matching any configured key will be fully decoded. Packets on channels with unknown keys will continue to show as ENCRYPTED.
 
+> **MeshCore private channels:** multi-key decryption for MeshCore is on the roadmap but not yet implemented. Currently only the default MeshCore key is tried.
+
 To change the default Meshtastic key (if your primary channel uses a non-default PSK):
 
 ```yaml
