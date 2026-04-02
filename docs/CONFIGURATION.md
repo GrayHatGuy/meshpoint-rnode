@@ -199,7 +199,7 @@ mqtt:
     - "LongFast"
 ```
 
-This publishes standard Meshtastic and MeshCore traffic to the community broker. Your Meshpoint appears on community maps with the gateway ID `!meshpoint-<device-name>`.
+This publishes standard Meshtastic and MeshCore traffic to the community broker. Your Meshpoint appears on community maps (meshmap.net, Liam Cottle, NHmesh) with a unique gateway ID that integrates natively with the Meshtastic ecosystem.
 
 ### Configuration Options
 
