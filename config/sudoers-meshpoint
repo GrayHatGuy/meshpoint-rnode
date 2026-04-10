@@ -1,0 +1,3 @@
+# Allow the meshpoint service user to restart/stop its own service
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart meshpoint
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop meshpoint

@@ -390,6 +390,11 @@ usermod -a -G spi,gpio,dialout,i2c meshpoint 2>/dev/null || true
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/data"
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/config"
 
+# Allow service user to restart/stop its own service (dashboard + remote commands)
+info "Installing sudoers rule for service management..."
+cp "${MESHPOINT_DIR}/config/sudoers-meshpoint" /etc/sudoers.d/meshpoint
+chmod 440 /etc/sudoers.d/meshpoint
+
 # ── 9. Configure journald log rotation ─────────────────────────────
 
 info "Configuring journald log limits (100M, 7-day retention)..."
