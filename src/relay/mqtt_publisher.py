@@ -80,7 +80,10 @@ class MqttPublisher:
 
     def connect(self) -> bool:
         if not PAHO_AVAILABLE:
-            logger.error("paho-mqtt not installed. Run: pip install paho-mqtt")
+            logger.error(
+                "paho-mqtt not installed. Run: "
+                "sudo /opt/meshpoint/venv/bin/pip install paho-mqtt"
+            )
             return False
 
         try:

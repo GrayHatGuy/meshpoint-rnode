@@ -183,7 +183,10 @@ FastAPI server on port 8080:
 ## Updating
 
 ```bash
-cd /opt/meshpoint && sudo git pull origin main && sudo systemctl restart meshpoint
+cd /opt/meshpoint
+sudo git pull origin main
+sudo /opt/meshpoint/venv/bin/pip install -r requirements.txt
+sudo systemctl restart meshpoint
 ```
 
 The local dashboard shows an orange update indicator when a new version is available.
