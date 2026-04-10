@@ -3,7 +3,7 @@ radio:
   frequency_mhz: 906.875
   spreading_factor: 11
   bandwidth_khz: 250.0
-  coding_rate: "4/8"
+  coding_rate: "4/5"
   sync_word: 0x2B
   preamble_length: 16
   tx_power_dbm: 22

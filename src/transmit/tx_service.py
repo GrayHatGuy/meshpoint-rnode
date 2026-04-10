@@ -21,6 +21,18 @@ logger = logging.getLogger(__name__)
 BROADCAST_ADDR_MT = 0xFFFFFFFF
 BROADCAST_ADDR_MC = 0xFFFF
 
+PRESET_DISPLAY_NAMES: dict[tuple[int, int], str] = {
+    (7, 250): "ShortFast",
+    (7, 500): "ShortTurbo",
+    (8, 250): "ShortSlow",
+    (9, 250): "MediumFast",
+    (10, 250): "MediumSlow",
+    (11, 250): "LongFast",
+    (11, 125): "LongMod",
+    (12, 125): "LongSlow",
+    (12, 62): "VLongSlow",
+}
+
 
 @dataclass
 class SendResult:
@@ -45,6 +57,7 @@ class TxService:
         transmit_config=None,
         meshcore_tx=None,
         duty_tracker: Optional[DutyCycleTracker] = None,
+        radio_config=None,
     ):
         self._wrapper = wrapper
         self._crypto = crypto
@@ -52,6 +65,7 @@ class TxService:
         self._config = transmit_config
         self._meshcore_tx = meshcore_tx
         self._duty = duty_tracker
+        self._radio_config = radio_config
         self._builder = None
         self._packet_counter = random.randint(1, 0xFFFF)
         self._source_node_id = self._resolve_node_id()
@@ -137,8 +151,23 @@ class TxService:
                 error="Packet build failed",
             )
 
+        logger.info(
+            "TX packet: dest=%08x src=%08x id=%08x hash=0x%02X len=%d hdr=%s",
+            dest_int, self._source_node_id, packet_id, channel_hash,
+            len(packet_bytes), packet_bytes[:16].hex(),
+        )
+
         tx_pkt = self._build_hal_packet(packet_bytes)
         airtime_ms = await self._get_airtime(tx_pkt)
+
+        logger.info(
+            "TX HAL: freq=%d bw=%d sf=%d cr=%d pow=%d preamble=%d "
+            "crc=%s hdr=%s pol=%s size=%d",
+            tx_pkt.freq_hz, tx_pkt.bandwidth, tx_pkt.datarate,
+            tx_pkt.coderate, tx_pkt.rf_power, tx_pkt.preamble,
+            not tx_pkt.no_crc, not tx_pkt.no_header,
+            "inv" if tx_pkt.invert_pol else "norm", tx_pkt.size,
+        )
 
         if self._duty and not self._duty.check_budget(airtime_ms):
             return SendResult(
@@ -149,9 +178,19 @@ class TxService:
                 airtime_ms=airtime_ms,
             )
 
+        pre_status = await asyncio.to_thread(self._wrapper.get_tx_status, 0)
+        logger.info("TX status before send: %d", pre_status)
+
         result_code = await asyncio.to_thread(self._wrapper.send, tx_pkt)
 
         if result_code == 0:
+            for delay in (0.05, 0.1, 0.5, 1.0):
+                await asyncio.sleep(delay)
+                st = await asyncio.to_thread(self._wrapper.get_tx_status, 0)
+                logger.info("TX status after %.0fms: %d (2=FREE 3=SCHED 4=EMIT)", delay * 1000, st)
+                if st == 2:
+                    break
+
             if self._duty:
                 self._duty.record_tx(airtime_ms)
             return SendResult(
@@ -226,20 +265,23 @@ class TxService:
             TX_MODE_IMMEDIATE,
         )
 
-        plan = self._channel_plan
+        radio = self._radio_config
         tx_pkt = LgwPktTxS()
-        tx_pkt.freq_hz = int(plan.tx_freq_hz or plan.radio_0_freq_hz)
+        tx_pkt.freq_hz = (
+            int(radio.frequency_mhz * 1_000_000) if radio else 906_875_000
+        )
         tx_pkt.tx_mode = TX_MODE_IMMEDIATE
         tx_pkt.count_us = 0
         tx_pkt.rf_chain = 0
         tx_pkt.rf_power = self._config.tx_power_dbm
         tx_pkt.modulation = MOD_LORA
         tx_pkt.freq_offset = 0
-        tx_pkt.bandwidth = BW_KHZ_TO_HAL.get(
-            int(plan.bandwidth_khz), BW_250KHZ
+        bw_khz = int(radio.bandwidth_khz) if radio else 250
+        tx_pkt.bandwidth = BW_KHZ_TO_HAL.get(bw_khz, BW_250KHZ)
+        tx_pkt.datarate = radio.spreading_factor if radio else 11
+        tx_pkt.coderate = self._resolve_coderate(
+            radio.coding_rate if radio else "4/8"
         )
-        tx_pkt.datarate = plan.spreading_factor
-        tx_pkt.coderate = self._resolve_coderate(plan.coding_rate)
         tx_pkt.invert_pol = False
         tx_pkt.f_dev = 0
         tx_pkt.preamble = 16
@@ -285,14 +327,41 @@ class TxService:
         return random.randint(0x01000000, 0xFFFFFFFE)
 
     def _compute_channel_hash(self, channel: int) -> int:
-        """Compute channel hash for the default channel."""
+        """Compute channel hash matching the Meshtastic firmware.
+
+        The firmware uses the modem preset display name (e.g. "LongFast")
+        as the channel name when the default channel has no custom name.
+        """
         if self._crypto is None:
             return 0x08
         try:
-            key = self._crypto.get_all_keys()[0]
-            return self._crypto.compute_channel_hash("", key)
+            keys = self._crypto.get_all_keys()
+            if channel == 0:
+                key = keys[0]
+                name = self._get_preset_name()
+            else:
+                channel_keys = list(self._crypto._keys.items())
+                if channel - 1 < len(channel_keys):
+                    ch_name, key = channel_keys[channel - 1]
+                    name = ch_name
+                else:
+                    key = keys[0]
+                    name = self._get_preset_name()
+
+            h = self._crypto.compute_channel_hash(name, key)
+            logger.info("Channel %d hash: 0x%02X (name=%s)", channel, h, name)
+            return h
         except (IndexError, Exception):
+            logger.debug("Channel hash fallback to 0x08", exc_info=True)
             return 0x08
+
+    def _get_preset_name(self) -> str:
+        """Derive the Meshtastic modem preset display name from radio params."""
+        if not self._radio_config:
+            return "LongFast"
+        sf = self._radio_config.spreading_factor
+        bw = int(self._radio_config.bandwidth_khz)
+        return PRESET_DISPLAY_NAMES.get((sf, bw), "Custom")
 
     @staticmethod
     def _resolve_destination(

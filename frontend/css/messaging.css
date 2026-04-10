@@ -43,7 +43,7 @@
 }
 
 .tab-content { display: none; }
-.tab-content--active { display: block; }
+.tab-content--active { display: block; overflow: auto; height: calc(100vh - 76px); }
 
 /* ── Messaging panel ────────────────────────────────────────────── */
 
@@ -124,6 +124,40 @@
 .msg-convo__icon--mt { background: #3498db; }
 .msg-convo__icon--mc { background: #27ae60; }
 .msg-convo__icon--bcast { background: #e67e22; }
+.msg-convo__icon--channel {
+    background: var(--surface-2, #22223a);
+    border: 1.5px solid var(--border, #2a2a4a);
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--text-muted, #888);
+}
+
+.msg-convo--channel .msg-convo__icon--channel {
+    color: var(--accent, #4ecdc4);
+    border-color: var(--accent, #4ecdc4);
+}
+
+.msg-sidebar__section-label {
+    padding: 0.5rem 1rem 0.25rem;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted, #666);
+}
+
+.msg-convo__proto-badge {
+    font-size: 0.55rem;
+    font-weight: 700;
+    padding: 0.05rem 0.3rem;
+    border-radius: 2px;
+    margin-left: 0.25rem;
+    vertical-align: middle;
+    color: #fff;
+}
+
+.msg-convo__proto-badge--mt { background: #3498db; }
+.msg-convo__proto-badge--mc { background: #27ae60; }
 
 .msg-convo__info { flex: 1; min-width: 0; }
 
@@ -257,6 +291,56 @@
     font-weight: 600;
     margin-bottom: 0.15rem;
     opacity: 0.8;
+}
+
+/* ── Signal indicator ──────────────────────────────────────────── */
+
+.msg-signal {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 1px;
+    margin-left: 0.5em;
+    vertical-align: middle;
+}
+
+.sig-bar {
+    display: inline-block;
+    width: 3px;
+    border-radius: 1px;
+    background: var(--surface-2, #333);
+    transition: background 0.2s;
+}
+
+.sig-bar--h1 { height: 4px; }
+.sig-bar--h2 { height: 6px; }
+.sig-bar--h3 { height: 8px; }
+.sig-bar--h4 { height: 10px; }
+.sig-bar--h5 { height: 12px; }
+
+.msg-signal--excellent .sig-bar.active { background: #00e676; }
+.msg-signal--good      .sig-bar.active { background: #4ecdc4; }
+.msg-signal--fair       .sig-bar.active { background: #ffd54f; }
+.msg-signal--poor       .sig-bar.active { background: #ff5252; }
+
+.msg-signal__val {
+    font-size: 0.55rem;
+    margin-left: 0.3em;
+    opacity: 0.85;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.msg-rx-count {
+    display: inline-block;
+    margin-left: 0.4em;
+    padding: 0 0.35em;
+    font-size: 0.5rem;
+    font-weight: 700;
+    border-radius: 3px;
+    background: rgba(78, 205, 196, 0.15);
+    color: #4ecdc4;
+    vertical-align: middle;
+    cursor: default;
 }
 
 /* ── Compose bar ────────────────────────────────────────────────── */

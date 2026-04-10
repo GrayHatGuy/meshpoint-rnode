@@ -4,17 +4,46 @@
  */
 document.addEventListener('DOMContentLoaded', async () => {
     const nodeMap = new NodeMap('map');
-    const nodeList = new SimpleNodeList('node-list');
     const packetFeed = new SimplePacketFeed('packet-tbody');
 
-    await _loadInitial(nodeMap, nodeList, packetFeed);
+    const nodeDrawer = new NodeDrawer('node-drawer', {
+        onSendMessage: (node) => _openMessagingForNode(node),
+        onViewOnMap: (node) => {
+            if (node.latitude && node.longitude) {
+                nodeMap.centerOn(node.latitude, node.longitude);
+            }
+        },
+    });
+
+    const nodeCards = new NodeCards('node-list', (node) => nodeDrawer.open(node));
+
+    const backdrop = document.getElementById('node-backdrop');
+    if (backdrop) {
+        backdrop.addEventListener('click', () => {
+            nodeDrawer.close();
+            backdrop.classList.remove('nd-backdrop--visible');
+        });
+    }
+
+    const origOpen = nodeDrawer.open.bind(nodeDrawer);
+    nodeDrawer.open = async (node) => {
+        if (backdrop) backdrop.classList.add('nd-backdrop--visible');
+        await origOpen(node);
+    };
+    const origClose = nodeDrawer.close.bind(nodeDrawer);
+    nodeDrawer.close = () => {
+        if (backdrop) backdrop.classList.remove('nd-backdrop--visible');
+        origClose();
+    };
+
+    await _loadInitial(nodeMap, nodeCards, packetFeed);
     await _updateStats();
     _checkForUpdate();
 
     window.concentratorWS.on('packet', (packet) => {
         packetFeed.addPacket(packet);
         nodeMap.updateFromPacket(packet);
-        nodeList.updateFromPacket(packet);
+        nodeCards.updateFromPacket(packet);
         _incrementPacketCount();
     });
 
@@ -23,18 +52,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.concentratorWS.connect();
 
     setInterval(() => {
-        _refreshData(nodeMap, nodeList);
+        _refreshData(nodeMap, nodeCards);
         _updateStats();
     }, 15_000);
 
     setInterval(_checkForUpdate, 300_000);
 });
 
+function _openMessagingForNode(node) {
+    const msgTab = document.querySelector('[data-tab="messages"]');
+    if (msgTab) msgTab.click();
+
+    setTimeout(() => {
+        if (window.messagingPanel) {
+            window.messagingPanel.openConversation({
+                node_id: node.node_id,
+                node_name: node.display_name || node.long_name || node.node_id,
+                protocol: node.protocol || 'meshtastic',
+                is_broadcast: false,
+            });
+        }
+    }, 100);
+}
+
 async function _loadInitial(nodeMap, nodeList, packetFeed) {
     try {
         const [deviceRes, nodesRes, packetsRes] = await Promise.all([
             fetch('/api/device'),
-            fetch('/api/nodes'),
+            fetch('/api/nodes?enrich=true'),
             fetch('/api/packets?limit=50'),
         ]);
         const device = await deviceRes.json();
@@ -42,6 +87,20 @@ async function _loadInitial(nodeMap, nodeList, packetFeed) {
         const packetsData = await packetsRes.json();
 
         _setText('device-name', device.device_name || 'Mesh Point');
+        if (device.device_id) {
+            const short = device.device_id.slice(0, 8);
+            const idEl = document.getElementById('device-id');
+            if (idEl) {
+                idEl.textContent = short;
+                idEl.title = device.device_id;
+                idEl.addEventListener('click', () => {
+                    navigator.clipboard.writeText(device.device_id).then(() => {
+                        idEl.textContent = 'copied!';
+                        setTimeout(() => { idEl.textContent = short; }, 1500);
+                    });
+                });
+            }
+        }
 
         const nodes = nodesData.nodes || nodesData || [];
         nodeMap.loadNodes(nodes, device);
@@ -62,7 +121,7 @@ async function _loadInitial(nodeMap, nodeList, packetFeed) {
 
 async function _refreshData(nodeMap, nodeList) {
     try {
-        const res = await fetch('/api/nodes');
+        const res = await fetch('/api/nodes?enrich=true');
         const data = await res.json();
         const nodes = data.nodes || data || [];
         nodeMap.loadNodes(nodes);

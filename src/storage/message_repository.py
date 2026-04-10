@@ -34,9 +34,12 @@ class Message:
     timestamp: str
     status: str
     packet_id: str
+    rssi: float | None = None
+    snr: float | None = None
+    rx_count: int = 1
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "id": self.id,
             "direction": self.direction,
             "text": self.text,
@@ -47,7 +50,13 @@ class Message:
             "timestamp": self.timestamp,
             "status": self.status,
             "packet_id": self.packet_id,
+            "rx_count": self.rx_count,
         }
+        if self.rssi is not None:
+            d["rssi"] = round(self.rssi, 1)
+        if self.snr is not None:
+            d["snr"] = round(self.snr, 1)
+        return d
 
 
 @dataclass
@@ -112,19 +121,48 @@ class MessageRepository:
         channel: int = 0,
         packet_id: str = "",
         direction: str = "received",
-    ) -> int:
-        """Record an inbound message. Use direction='overheard' for DMs between other nodes."""
+        rssi: float | None = None,
+        snr: float | None = None,
+    ) -> tuple[int, bool]:
+        """Record an inbound message. Returns (row_id, is_duplicate).
+
+        Deduplicates by packet_id: if the same packet arrives via
+        multiple RF paths, bumps rx_count and keeps the strongest signal.
+        """
+        if packet_id:
+            existing = await self._db.fetch_one(
+                "SELECT id, rssi, rx_count FROM messages WHERE packet_id = ?",
+                (packet_id,),
+            )
+            if existing:
+                new_count = (existing["rx_count"] or 1) + 1
+                better_signal = rssi is not None and (
+                    existing["rssi"] is None or rssi > existing["rssi"]
+                )
+                if better_signal:
+                    await self._db.execute(
+                        "UPDATE messages SET rssi=?, snr=?, rx_count=? WHERE id=?",
+                        (rssi, snr, new_count, existing["id"]),
+                    )
+                else:
+                    await self._db.execute(
+                        "UPDATE messages SET rx_count=? WHERE id=?",
+                        (new_count, existing["id"]),
+                    )
+                await self._db.commit()
+                return existing["id"], True
+
         now = datetime.now(timezone.utc).isoformat()
         cursor = await self._db.execute(
             """INSERT INTO messages
                (direction, text, node_id, node_name, protocol,
-                channel, timestamp, status, packet_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                channel, timestamp, status, packet_id, rssi, snr)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (direction, text, node_id, node_name, protocol,
-             channel, now, "delivered", packet_id),
+             channel, now, "delivered", packet_id, rssi, snr),
         )
         await self._db.commit()
-        return cursor.lastrowid
+        return cursor.lastrowid, False
 
     async def get_conversations(
         self, include_overheard: bool = False,
@@ -218,6 +256,9 @@ class MessageRepository:
             timestamp=row["timestamp"],
             status=row["status"],
             packet_id=row["packet_id"] or "",
+            rssi=row.get("rssi"),
+            snr=row.get("snr"),
+            rx_count=row.get("rx_count") or 1,
         )
 
 

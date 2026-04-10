@@ -82,8 +82,8 @@ async def get_config():
     if _tx_service and hasattr(_tx_service, "_duty"):
         duty = _tx_service._duty
         if duty:
-            duty_info["used_percent"] = round(duty.used_percent, 2)
-            duty_info["remaining_ms"] = duty.remaining_budget_ms
+            duty_info["used_percent"] = round(duty.current_usage_percent(), 2)
+            duty_info["remaining_ms"] = duty.remaining_budget_ms()
 
     node_id_hex = f"!{tx.node_id:08x}" if tx.node_id else ""
 
@@ -128,16 +128,18 @@ class TransmitUpdate(BaseModel):
 
 @router.put("/transmit")
 async def update_transmit(req: TransmitUpdate):
-    """Update TX settings. Runtime-safe: applies immediately."""
+    """Update TX settings. Some changes require a restart."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
 
     updates = {}
     tx = _config.transmit
+    restart_needed = False
 
     if req.enabled is not None:
         tx.enabled = req.enabled
         updates["enabled"] = req.enabled
+        restart_needed = True
     if req.tx_power_dbm is not None:
         if not 0 <= req.tx_power_dbm <= 30:
             raise HTTPException(400, "TX power must be 0-30 dBm")
@@ -155,9 +157,12 @@ async def update_transmit(req: TransmitUpdate):
         updates["hop_limit"] = req.hop_limit
 
     if updates:
-        save_section_to_yaml("transmit", updates)
+        try:
+            save_section_to_yaml("transmit", updates)
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc))
 
-    return {"saved": True, "restart_required": False, "updates": updates}
+    return {"saved": True, "restart_required": restart_needed, "updates": updates}
 
 
 class IdentityUpdate(BaseModel):
@@ -168,12 +173,13 @@ class IdentityUpdate(BaseModel):
 
 @router.put("/identity")
 async def update_identity(req: IdentityUpdate):
-    """Update node identity. Runtime-safe."""
+    """Update node identity. node_id changes need restart."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
 
     updates = {}
     tx = _config.transmit
+    restart_needed = False
 
     if req.long_name is not None:
         if len(req.long_name) > 36:
@@ -188,11 +194,15 @@ async def update_identity(req: IdentityUpdate):
     if req.node_id is not None:
         tx.node_id = req.node_id
         updates["node_id"] = req.node_id
+        restart_needed = True
 
     if updates:
-        save_section_to_yaml("transmit", updates)
+        try:
+            save_section_to_yaml("transmit", updates)
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc))
 
-    return {"saved": True, "restart_required": False, "updates": updates}
+    return {"saved": True, "restart_required": restart_needed, "updates": updates}
 
 
 class RadioUpdate(BaseModel):
@@ -254,7 +264,10 @@ async def update_radio(req: RadioUpdate):
         updates["frequency_mhz"] = REGION_DEFAULTS[req.region]["frequency_mhz"]
 
     if updates:
-        save_section_to_yaml("radio", updates)
+        try:
+            save_section_to_yaml("radio", updates)
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc))
 
     return {
         "saved": True,
@@ -285,7 +298,10 @@ async def update_channels(req: ChannelsUpdate):
             channel_keys[ch.name] = ch.psk_b64
 
     _config.meshtastic.channel_keys = channel_keys
-    save_section_to_yaml("meshtastic", {"channel_keys": channel_keys})
+    try:
+        save_section_to_yaml("meshtastic", {"channel_keys": channel_keys})
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc))
 
     if _crypto and hasattr(_crypto, "add_channel_key"):
         for name, key_b64 in channel_keys.items():

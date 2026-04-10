@@ -80,6 +80,11 @@ class MessagingPanel {
         this._contacts.load(this._monitorMode);
     }
 
+    openConversation(convo) {
+        if (!this._initialized) this.init();
+        this._onConversationSelected(convo);
+    }
+
     _onConversationSelected(convo) {
         this._activeConvo = convo;
         this._chat.setConversation(convo);
@@ -141,7 +146,7 @@ class MessagingPanel {
             }
 
             if (this._activeConvo && data.node_id === this._activeConvo.node_id) {
-                this._chat.addMessage({
+                const msg = {
                     id: Date.now(),
                     direction: data.direction || 'received',
                     text: data.text,
@@ -154,10 +159,21 @@ class MessagingPanel {
                     packet_id: data.packet_id || '',
                     source_id: data.source_id || '',
                     destination_id: data.destination_id || '',
-                });
+                };
+                if (data.rssi != null) msg.rssi = data.rssi;
+                if (data.snr != null) msg.snr = data.snr;
+                this._chat.addMessage(msg);
             }
             this._contacts.addOrUpdateConversation(data);
             if (!isOverheard) this._updateUnreadBadge();
+        });
+
+        window.concentratorWS.on('message_updated', (data) => {
+            if (this._activeConvo && data.node_id === this._activeConvo.node_id) {
+                this._chat.updateBubbleSignal(
+                    data.packet_id, data.rssi, data.snr, data.rx_count
+                );
+            }
         });
 
         window.concentratorWS.on('message_sent', (data) => {

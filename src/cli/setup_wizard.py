@@ -24,25 +24,38 @@ LOCAL_CONFIG_PATH = Path("config/local.yaml")
 CLOUD_URL = "https://meshradar.io"
 
 
+def _load_existing_config() -> dict:
+    """Load existing local.yaml, returning empty dict if absent."""
+    if not LOCAL_CONFIG_PATH.exists():
+        return {}
+    try:
+        with open(LOCAL_CONFIG_PATH) as fh:
+            data = yaml.safe_load(fh)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
 def run_setup() -> None:
     """Main entry point for the interactive setup wizard."""
     _print_banner()
 
-    if LOCAL_CONFIG_PATH.exists():
-        if not _confirm("Existing config/local.yaml found. Overwrite?"):
-            print("  Setup cancelled.")
-            return
+    existing = _load_existing_config()
+    if existing:
+        print("  Existing config/local.yaml found.")
+        print("  Press Enter at any prompt to keep the current value.")
+        print()
 
     config: dict = {}
 
     report = _step_hardware_detect()
-    _step_region(config)
+    _step_region(config, existing)
     _step_capture_source(config, report)
-    _step_api_key(config)
-    _step_device_name(config)
-    _step_location(config, report)
+    _step_api_key(config, existing)
+    _step_device_name(config, existing)
+    _step_location(config, report, existing)
     _step_relay(config, report)
-    _step_device_id(config)
+    _step_device_id(config, existing)
 
     _write_config(config)
     _step_start_service()
@@ -76,7 +89,7 @@ def _step_hardware_detect() -> HardwareReport:
     return report
 
 
-def _step_region(config: dict) -> None:
+def _step_region(config: dict, existing: dict | None = None) -> None:
     """Select the LoRa frequency region."""
     print("  [2/8] Frequency region")
     print()
@@ -85,11 +98,22 @@ def _step_region(config: dict) -> None:
     print("        concentrator listens on.")
     print()
 
+    current_region = (existing or {}).get("radio", {}).get("region")
     for i, region in enumerate(SUPPORTED_REGIONS, 1):
-        print(f"          {i}. {_REGION_LABELS[region]}")
+        marker = " <-- current" if region == current_region else ""
+        print(f"          {i}. {_REGION_LABELS[region]}{marker}")
+
+    current_idx = None
+    if current_region in SUPPORTED_REGIONS:
+        current_idx = SUPPORTED_REGIONS.index(current_region) + 1
+
+    prompt_suffix = f" [{current_idx}]" if current_idx else ""
 
     while True:
-        raw = _prompt(f"Region [1-{len(SUPPORTED_REGIONS)}]:").strip()
+        raw = _prompt(f"Region [1-{len(SUPPORTED_REGIONS)}]{prompt_suffix}:").strip()
+        if not raw and current_idx is not None:
+            idx = current_idx - 1
+            break
         try:
             idx = int(raw) - 1
             if 0 <= idx < len(SUPPORTED_REGIONS):
@@ -137,23 +161,34 @@ def _step_capture_source(config: dict, report: HardwareReport) -> None:
     _maybe_add_meshcore_usb(config, report)
 
 
-def _step_api_key(config: dict) -> None:
+def _step_api_key(config: dict, existing: dict | None = None) -> None:
     """Prompt for the Mesh Radar API key (required, signature-verified)."""
     from src.activation import verify_license_key
 
     print("  [4/8] API key")
     print()
-    print("        An API key is required to activate this Mesh Point.")
-    print(f"        Get a free key at {CLOUD_URL}")
-    print()
-    print("        Steps:")
-    print("          1. Go to meshradar.io and create an account")
-    print("          2. Click 'API Keys' in the top bar")
-    print("          3. Generate a new key and copy it")
-    print()
+
+    current_key = (existing or {}).get("upstream", {}).get("auth_token")
+    if current_key:
+        masked = current_key[:8] + "..." + current_key[-4:]
+        print(f"        Current key: {masked}")
+        print("        Press Enter to keep the current key, or paste a new one.")
+        print()
+    else:
+        print("        An API key is required to activate this Mesh Point.")
+        print(f"        Get a free key at {CLOUD_URL}")
+        print()
+        print("        Steps:")
+        print("          1. Go to meshradar.io and create an account")
+        print("          2. Click 'API Keys' in the top bar")
+        print("          3. Generate a new key and copy it")
+        print()
 
     while True:
         api_key = _prompt("Paste your API key:").strip()
+        if not api_key and current_key:
+            api_key = current_key
+            break
         if not api_key:
             print("        An API key is required. Get one free at meshradar.io")
             print()
@@ -171,10 +206,11 @@ def _step_api_key(config: dict) -> None:
     print()
 
 
-def _step_device_name(config: dict) -> None:
+def _step_device_name(config: dict, existing: dict | None = None) -> None:
     """Choose a name for this Mesh Point."""
     print("  [5/8] Device name")
-    default_name = _default_device_name()
+    current_name = (existing or {}).get("device", {}).get("device_name")
+    default_name = current_name or _default_device_name()
     name = _prompt(f"Device name [{default_name}]:").strip()
     if not name:
         name = default_name
@@ -184,7 +220,11 @@ def _step_device_name(config: dict) -> None:
     print()
 
 
-def _step_location(config: dict, report: HardwareReport) -> None:
+def _step_location(
+    config: dict,
+    report: HardwareReport,
+    existing: dict | None = None,
+) -> None:
     """Set device GPS coordinates."""
     print("  [6/8] Location")
 
@@ -201,15 +241,24 @@ def _step_location(config: dict, report: HardwareReport) -> None:
             print()
             return
 
+    cur_dev = (existing or {}).get("device", {})
+    cur_lat = cur_dev.get("latitude")
+    cur_lon = cur_dev.get("longitude")
+    cur_alt = cur_dev.get("altitude")
+
     print("        Enter coordinates manually (used for map placement).")
     print("        Tip: in Google Maps, right-click any location and click")
     print("        the coordinates at the top of the menu to copy them.")
-    print("        They copy in decimal format (e.g. 43.8891, -72.2219).")
+    print("        They copy in decimal format (e.g. 42.3601, -71.0589).")
+    if cur_lat is not None and cur_lon is not None:
+        print(f"        Current: {cur_lat}, {cur_lon}")
     print()
 
-    lat = _prompt_float("Latitude (e.g. 42.3601):")
-    lon = _prompt_float("Longitude (e.g. -71.0589):")
-    alt = _prompt_float("Altitude in meters (or Enter to skip):", required=False)
+    lat = _prompt_float_with_default("Latitude (e.g. 42.3601):", cur_lat)
+    lon = _prompt_float_with_default("Longitude (e.g. -71.0589):", cur_lon)
+    alt = _prompt_float_with_default(
+        "Altitude in meters (or Enter to skip):", cur_alt, required=False
+    )
 
     device = config.setdefault("device", {})
     if lat is not None:
@@ -256,11 +305,16 @@ def _step_relay(config: dict, report: HardwareReport) -> None:
     print()
 
 
-def _step_device_id(config: dict) -> None:
-    """Generate a stable, persistent device ID."""
-    device_id = str(uuid.uuid4())
+def _step_device_id(config: dict, existing: dict | None = None) -> None:
+    """Preserve existing device ID, or generate a new one."""
+    current_id = (existing or {}).get("device", {}).get("device_id")
+    if current_id:
+        device_id = current_id
+        print(f"  [8/8] Device ID: {device_id} (preserved)")
+    else:
+        device_id = str(uuid.uuid4())
+        print(f"  [8/8] Device ID: {device_id} (new)")
     config.setdefault("device", {})["device_id"] = device_id
-    print(f"  [8/8] Device ID: {device_id}")
     print()
 
 
@@ -297,134 +351,9 @@ def _step_start_service() -> None:
 
 
 def _maybe_add_meshcore_usb(config: dict, report: HardwareReport) -> None:
-    """Offer to enable MeshCore USB monitoring if USB serial ports exist."""
-    capture_port = config.get("capture", {}).get("serial_port")
-    candidates = [
-        p for p in report.meshcore_usb_candidates if p != capture_port
-    ]
-
-    if not candidates:
-        return
-
-    print()
-    print("        USB serial port(s) detected that could be a MeshCore node:")
-    for port in candidates:
-        print(f"          - {port}")
-    print()
-    print("        If you have a MeshCore device (Heltec, T-Beam, etc.) plugged")
-    print("        in via USB, Mesh Point can monitor its traffic automatically.")
-    print()
-
-    if not _confirm("Enable MeshCore USB monitoring?"):
-        config.setdefault("capture", {}).setdefault(
-            "meshcore_usb", {}
-        )["auto_detect"] = False
-        print("        MeshCore USB disabled.")
-        print()
-        return
-
-    sources = config.setdefault("capture", {}).setdefault("sources", [])
-    if "meshcore_usb" not in sources:
-        sources.append("meshcore_usb")
-
-    if len(candidates) == 1:
-        chosen_port = candidates[0]
-    else:
-        chosen_port = _choose_from_list(
-            "Select MeshCore USB port:", candidates
-        )
-
-    config["capture"].setdefault("meshcore_usb", {})["serial_port"] = (
-        chosen_port
-    )
-    print(f"        MeshCore USB enabled on {chosen_port}")
-    print()
-
-    selected_region = config.get("radio", {}).get("region", "US")
-    _configure_meshcore_radio(chosen_port, selected_region)
-
-
-def _configure_meshcore_radio(port: str, region: str = "US") -> None:
-    """Configure the MeshCore companion's radio frequency.
-
-    If the selected region has a known MeshCore preset (US, EU, ANZ),
-    it is applied automatically. Otherwise the user is prompted for
-    custom parameters or can skip.
-    """
-    import time
-
-    from src.cli.meshcore_radio_config import (
-        REGION_PRESETS,
-        configure_radio,
-        query_radio,
-        verify_radio,
-    )
-
-    print("        Querying companion radio settings...")
-    status = query_radio(port)
-
-    if status:
-        model_str = f" ({status.model})" if status.model else ""
-        print(f"        Device: {status.name}{model_str}")
-        print(f"        Current: {status.summary()}")
-    else:
-        print("        Could not read current radio settings.")
-
-    print()
-
-    meshcore_region_map = {"US": "US", "EU_868": "EU", "ANZ": "ANZ"}
-    auto_preset_key = meshcore_region_map.get(region)
-
-    if auto_preset_key and auto_preset_key in REGION_PRESETS:
-        preset = REGION_PRESETS[auto_preset_key]
-        print(f"        Applying {auto_preset_key} MeshCore preset")
-        print(f"        ({preset.label})")
-        if not _confirm("Apply this preset?", default_yes=True):
-            print("        Skipped. Configure manually later if needed.")
-            print()
-            return
-        freq = preset.frequency_mhz
-        bw = preset.bandwidth_khz
-        sf = preset.spreading_factor
-        cr = preset.coding_rate
-    else:
-        print("        No standard MeshCore preset for your region.")
-        print("        Enter custom radio parameters, or skip.")
-        print()
-        if not _confirm("Enter custom MeshCore radio settings?"):
-            print("        Skipped.")
-            print()
-            return
-        freq = _prompt_float("Frequency MHz (e.g. 910.525):")
-        bw = _prompt_float("Bandwidth kHz (e.g. 62.5):")
-        sf_val = _prompt_float("Spreading factor (e.g. 7):")
-        cr_val = _prompt_float("Coding rate (e.g. 5):")
-        if None in (freq, bw, sf_val, cr_val):
-            print("        Invalid input. Skipping radio configuration.")
-            print()
-            return
-        sf = int(sf_val)
-        cr = int(cr_val)
-
-    print(f"        Setting radio to {freq} MHz / BW{bw} / SF{sf} / CR{cr}...")
-
-    ok = configure_radio(port, freq, bw, sf, cr)
-    if not ok:
-        print("        Failed to configure radio. Check the device and retry.")
-        print()
-        return
-
-    print("        Radio configured. Companion is rebooting...")
-    time.sleep(4)
-
-    verified = verify_radio(port)
-    if verified:
-        print(f"        Verified: {verified.summary()}")
-    else:
-        print("        Could not verify (device may still be rebooting).")
-        print("        The settings will apply on next power cycle.")
-
-    print()
+    """Delegate MeshCore USB setup to the wizard_meshcore module."""
+    from src.cli.wizard_meshcore import maybe_add_meshcore_usb
+    maybe_add_meshcore_usb(config, report, _confirm, _choose_from_list)
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -450,6 +379,31 @@ def _prompt_float(
     while True:
         raw = _prompt(message).strip()
         if not raw:
+            if required:
+                print("          A value is required.")
+                continue
+            return None
+        try:
+            return round(float(raw), 6)
+        except ValueError:
+            print("          Please enter a valid number.")
+
+
+def _prompt_float_with_default(
+    message: str,
+    default: Optional[float] = None,
+    required: bool = True,
+) -> Optional[float]:
+    """Prompt for a float value with an optional pre-filled default."""
+    if default is not None:
+        label = f"{message} [{default}]"
+    else:
+        label = message
+    while True:
+        raw = _prompt(label).strip()
+        if not raw:
+            if default is not None:
+                return default
             if required:
                 print("          A value is required.")
                 continue

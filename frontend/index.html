@@ -11,6 +11,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/node_cards.css" />
+    <link rel="stylesheet" href="css/node_drawer.css" />
     <link rel="stylesheet" href="css/messaging.css" />
     <link rel="stylesheet" href="css/radio.css" />
 </head>
@@ -29,6 +31,7 @@
             <span id="packet-count-badge" class="top-bar__stat">0 packets</span>
             <span class="top-bar__divider">|</span>
             <span id="device-name" class="top-bar__device"></span>
+            <span id="device-id" class="top-bar__device-id" title="Click to copy device ID"></span>
             <span id="version-badge" class="top-bar__version">--</span>
             <a id="update-badge" class="update-badge hidden" title="Update available" href="https://github.com/KMX415/meshpoint/blob/main/docs/ONBOARDING.md#updating" target="_blank" rel="noopener">&#9888;</a>
         </div>
@@ -147,11 +150,15 @@
         <div id="radio-panel"></div>
     </div>
 
+    <div id="node-backdrop" class="nd-backdrop"></div>
+    <div id="node-drawer" class="nd-drawer"></div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script src="js/websocket_client.js"></script>
     <script src="js/components/node_map.js"></script>
-    <script src="js/simple_node_list.js"></script>
+    <script src="js/node_cards.js"></script>
+    <script src="js/node_drawer.js"></script>
     <script src="js/simple_packet_feed.js"></script>
     <script src="js/messaging_contacts.js"></script>
     <script src="js/messaging_chat.js"></script>

@@ -110,6 +110,7 @@ class MessagingChat {
         const bubble = document.createElement('div');
         bubble.className = `msg-bubble msg-bubble--${msg.direction}`;
         bubble.dataset.msgId = msg.id;
+        if (msg.packet_id) bubble.dataset.pktId = msg.packet_id;
 
         const time = msg.timestamp
             ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -124,10 +125,12 @@ class MessagingChat {
             senderHtml = `<div class="msg-bubble__sender">${this._esc(msg.node_name || msg.node_id)}</div>`;
         }
 
+        const signalHtml = this._buildSignalHtml(msg);
+
         bubble.innerHTML = `
             ${senderHtml}
             <div class="msg-bubble__text">${this._esc(msg.text)}</div>
-            <div class="msg-bubble__meta">${time}${statusText}</div>
+            <div class="msg-bubble__meta">${time}${statusText}${signalHtml}</div>
         `;
 
         this._messagesEl.appendChild(bubble);
@@ -220,14 +223,53 @@ class MessagingChat {
         const bubble = document.createElement('div');
         bubble.className = `msg-bubble msg-bubble--${msg.direction}`;
         bubble.dataset.msgId = msg.id;
+        if (msg.packet_id) bubble.dataset.pktId = msg.packet_id;
         const time = msg.timestamp
             ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             : '';
+        const signalHtml = this._buildSignalHtml(msg);
         bubble.innerHTML = `
             <div class="msg-bubble__text">${this._esc(msg.text)}</div>
-            <div class="msg-bubble__meta">${time}</div>
+            <div class="msg-bubble__meta">${time}${signalHtml}</div>
         `;
         return bubble;
+    }
+
+    updateBubbleSignal(packetId, rssi, snr, rxCount) {
+        const bubble = this._messagesEl.querySelector(`[data-pkt-id="${packetId}"]`);
+        if (!bubble) return;
+
+        const meta = bubble.querySelector('.msg-bubble__meta');
+        if (!meta) return;
+
+        const sig = meta.querySelector('.msg-signal');
+        if (sig) sig.remove();
+        const rx = meta.querySelector('.msg-rx-count');
+        if (rx) rx.remove();
+
+        const fakeMsg = { direction: 'received', rssi, snr, rx_count: rxCount };
+        meta.insertAdjacentHTML('beforeend', this._buildSignalHtml(fakeMsg));
+    }
+
+    _buildSignalHtml(msg) {
+        if (msg.direction === 'sent' || msg.rssi == null) return '';
+
+        const rssi = msg.rssi;
+        const snr = msg.snr;
+        const level = rssi > -80 ? 5 : rssi > -95 ? 4 : rssi > -110 ? 3 : rssi > -125 ? 2 : 1;
+        const cls = level >= 4 ? 'excellent' : level === 3 ? 'good' : level === 2 ? 'fair' : 'poor';
+
+        let bars = '';
+        for (let i = 1; i <= 5; i++) {
+            const active = i <= level ? 'active' : '';
+            bars += `<span class="sig-bar sig-bar--h${i} ${active}"></span>`;
+        }
+
+        const snrStr = snr != null ? ` · ${snr.toFixed(1)} dB` : '';
+        const rxStr = (msg.rx_count || 1) > 1
+            ? `<span class="msg-rx-count" title="Received via ${msg.rx_count} RF paths">×${msg.rx_count}</span>`
+            : '';
+        return `<span class="msg-signal msg-signal--${cls}">${bars}<span class="msg-signal__val">${rssi.toFixed(1)}${snrStr}</span></span>${rxStr}`;
     }
 
     _esc(str) {

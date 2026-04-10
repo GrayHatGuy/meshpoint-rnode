@@ -1,0 +1,236 @@
+/* ---- Node Detail Drawer ---- */
+
+.nd-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 360px;
+    height: 100vh;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+    z-index: 2000;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.nd-drawer--open {
+    transform: translateX(0);
+}
+
+/* ---- Header ---- */
+
+.nd-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--bg-card);
+}
+
+.nd-header__left {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.nd-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.nd-header__info {
+    min-width: 0;
+}
+
+.nd-header__name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nd-header__id {
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.nd-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.4rem;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+
+.nd-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+
+/* ---- Body ---- */
+
+.nd-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+}
+
+.nd-loading {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* ---- Actions ---- */
+
+.nd-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.nd-action-btn {
+    flex: 1;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    font-family: var(--font-sans);
+}
+
+.nd-action-btn:hover {
+    background: rgba(6, 182, 212, 0.08);
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+}
+
+.nd-action-btn--primary {
+    background: rgba(6, 182, 212, 0.12);
+    border-color: rgba(6, 182, 212, 0.3);
+    color: var(--accent-cyan);
+}
+
+.nd-action-btn--primary:hover {
+    background: rgba(6, 182, 212, 0.2);
+}
+
+/* ---- Sections ---- */
+
+.nd-section {
+    border-bottom: 1px solid rgba(35, 48, 73, 0.4);
+}
+
+.nd-section__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+.nd-section__header:hover {
+    background: rgba(6, 182, 212, 0.04);
+}
+
+.nd-section__title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent-cyan);
+}
+
+.nd-section__arrow {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+}
+
+.nd-section__content {
+    padding: 0 1rem 0.5rem;
+}
+
+.nd-section__empty {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    padding: 0.25rem 0;
+    font-style: italic;
+}
+
+/* ---- Data Rows ---- */
+
+.nd-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.2rem 0;
+}
+
+.nd-row__label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.nd-row__value {
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* ---- Backdrop (optional click-outside-to-close) ---- */
+
+.nd-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 1999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+}
+
+.nd-backdrop--visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (max-width: 480px) {
+    .nd-drawer {
+        width: 100%;
+    }
+}

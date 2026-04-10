@@ -94,17 +94,17 @@ class LgwPktRxS(ctypes.Structure):
 # ── TX structs ──────────────────────────────────────────────────────
 
 class LgwTxGainS(ctypes.Structure):
-    """Mirrors struct lgw_tx_gain_s.
+    """Mirrors struct lgw_tx_gain_s from loragw_hal.h.
 
-    For SX1250 radios (RAK2287), only rf_power, pa_gain, and pwr_idx
-    are significant. Other fields are legacy (SX1257/SX1301).
+    Field order must match the C struct exactly. For SX1250 radios
+    (RAK2287), rf_power, pa_gain, and pwr_idx are the active fields.
     """
     _fields_ = [
+        ("rf_power", ctypes.c_int8),
         ("dig_gain", ctypes.c_uint8),
         ("pa_gain", ctypes.c_uint8),
         ("dac_gain", ctypes.c_uint8),
         ("mix_gain", ctypes.c_uint8),
-        ("rf_power", ctypes.c_int8),
         ("offset_i", ctypes.c_int8),
         ("offset_q", ctypes.c_int8),
         ("pwr_idx", ctypes.c_uint8),

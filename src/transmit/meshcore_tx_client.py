@@ -47,6 +47,7 @@ class MeshCoreTxClient:
     def __init__(self):
         self._mc = None
         self._connected = False
+        self._post_command_callback = None
 
     @property
     def connected(self) -> bool:
@@ -58,6 +59,21 @@ class MeshCoreTxClient:
         self._connected = mc_instance is not None
         if self._connected:
             logger.info("MeshCore TX client attached to shared connection")
+
+    def set_post_command_callback(self, callback) -> None:
+        """Register a coroutine to run after each command completes.
+
+        Used to restart auto_message_fetching on the USB source after
+        TX operations that may disrupt the event subscription loop.
+        """
+        self._post_command_callback = callback
+
+    async def _run_post_command(self) -> None:
+        if self._post_command_callback:
+            try:
+                await self._post_command_callback()
+            except Exception:
+                logger.debug("Post-command callback failed", exc_info=True)
 
     async def create_connection(
         self,
@@ -104,11 +120,14 @@ class MeshCoreTxClient:
             logger.info(
                 "MeshCore channel %d message sent: %s", channel, event_type
             )
+            await self._run_post_command()
             return SendResult(success=True, event_type=event_type)
         except asyncio.TimeoutError:
+            await self._run_post_command()
             return SendResult(success=False, error="Send timed out")
         except Exception as exc:
             logger.exception("MeshCore channel send failed")
+            await self._run_post_command()
             return SendResult(success=False, error=str(exc))
 
     async def send_direct_message(
@@ -128,11 +147,14 @@ class MeshCoreTxClient:
                 else str(result.type)
             )
             logger.info("MeshCore DM sent: %s", event_type)
+            await self._run_post_command()
             return SendResult(success=True, event_type=event_type)
         except asyncio.TimeoutError:
+            await self._run_post_command()
             return SendResult(success=False, error="Send timed out")
         except Exception as exc:
             logger.exception("MeshCore DM send failed")
+            await self._run_post_command()
             return SendResult(success=False, error=str(exc))
 
     async def send_advert(self, flood: bool = False) -> SendResult:
@@ -150,12 +172,24 @@ class MeshCoreTxClient:
                 else str(result.type)
             )
             logger.info("MeshCore advert sent: %s", event_type)
+            await self._run_post_command()
             return SendResult(success=True, event_type=event_type)
         except asyncio.TimeoutError:
+            await self._run_post_command()
             return SendResult(success=False, error="Advert timed out")
         except Exception as exc:
             logger.exception("MeshCore advert send failed")
+            await self._run_post_command()
             return SendResult(success=False, error=str(exc))
+
+    @staticmethod
+    def _normalize_contact_payload(payload) -> list[dict]:
+        """Accept both dict-keyed-by-pubkey and list formats."""
+        if isinstance(payload, dict):
+            return list(payload.values())
+        if isinstance(payload, list):
+            return [e for e in payload if isinstance(e, dict)]
+        return []
 
     async def get_radio_info(self) -> Optional[RadioStatus]:
         """Read companion radio parameters."""
@@ -184,30 +218,27 @@ class MeshCoreTxClient:
         if not self.connected:
             return []
         try:
+            result = await asyncio.wait_for(
+                self._mc.commands.get_contacts(),
+                timeout=10.0,
+            )
+            entries = self._normalize_contact_payload(result.payload)
             contacts = []
-            idx = 0
-            while True:
-                result = await asyncio.wait_for(
-                    self._mc.commands.get_contact(idx),
-                    timeout=5.0,
+            for i, entry in enumerate(entries):
+                name = (
+                    entry.get("adv_name")
+                    or entry.get("name")
+                    or ""
                 )
-                from meshcore import EventType
-                if result.type == EventType.ERROR:
-                    break
-                payload = (
-                    result.payload
-                    if isinstance(result.payload, dict)
-                    else {}
-                )
-                if not payload.get("name"):
-                    break
-                contacts.append({
-                    "index": idx,
-                    "name": payload.get("name", ""),
-                    "public_key": payload.get("public_key", ""),
-                    "last_seen": payload.get("last_seen", 0),
-                })
-                idx += 1
+                pk = entry.get("public_key", "")
+                if name and pk:
+                    contacts.append({
+                        "index": i,
+                        "name": name,
+                        "public_key": pk,
+                        "last_seen": entry.get("lastmod", 0),
+                    })
+            logger.info("get_contacts: %d contacts parsed", len(contacts))
             return contacts
         except Exception:
             logger.exception("Failed to retrieve MeshCore contacts")

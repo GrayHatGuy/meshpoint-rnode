@@ -241,8 +241,14 @@ def save_section_to_yaml(section: str, values: dict) -> None:
         existing[section] = values
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as fh:
-        yaml.dump(existing, fh, default_flow_style=False, sort_keys=False)
+    try:
+        with open(path, "w") as fh:
+            yaml.dump(existing, fh, default_flow_style=False, sort_keys=False)
+    except PermissionError:
+        raise PermissionError(
+            f"Cannot write to {path}. "
+            f"Fix with: sudo chown pi:pi {path}"
+        )
 
 
 def validate_activation(config: AppConfig) -> None:

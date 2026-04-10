@@ -7,6 +7,7 @@ class MessagingContacts {
     constructor(listEl, onSelect) {
         this._listEl = listEl;
         this._onSelect = onSelect;
+        this._channels = [];
         this._conversations = [];
         this._activeNodeId = null;
         this._filter = 'all';
@@ -14,11 +15,14 @@ class MessagingContacts {
 
     async load(includeOverheard = false) {
         try {
-            const url = includeOverheard
-                ? '/api/messages/conversations?include_overheard=true'
-                : '/api/messages/conversations';
-            const res = await fetch(url);
-            this._conversations = await res.json();
+            const [convosRes, channelsRes] = await Promise.all([
+                fetch(includeOverheard
+                    ? '/api/messages/conversations?include_overheard=true'
+                    : '/api/messages/conversations'),
+                fetch('/api/messages/channels'),
+            ]);
+            this._conversations = await convosRes.json();
+            this._channels = await channelsRes.json();
             this.render();
         } catch (e) {
             console.error('Failed to load conversations:', e);
@@ -27,19 +31,58 @@ class MessagingContacts {
 
     render() {
         this._listEl.innerHTML = '';
-        const filtered = this._filter === 'all'
-            ? this._conversations
-            : this._conversations.filter(c => c.protocol === this._filter);
 
-        if (filtered.length === 0) {
-            this._listEl.innerHTML = '<div class="msg-chat__empty">No conversations yet</div>';
-            return;
+        const filteredChannels = this._filter === 'all'
+            ? this._channels
+            : this._channels.filter(c => c.protocol === this._filter);
+
+        if (filteredChannels.length > 0) {
+            const label = document.createElement('div');
+            label.className = 'msg-sidebar__section-label';
+            label.textContent = 'Channels';
+            this._listEl.appendChild(label);
+
+            filteredChannels.forEach(ch => {
+                const convo = this._channelToConvo(ch);
+                const el = this._buildConvoEl(convo);
+                this._listEl.appendChild(el);
+            });
         }
 
-        filtered.forEach(convo => {
-            const el = this._buildConvoEl(convo);
-            this._listEl.appendChild(el);
-        });
+        const dmConvos = (this._filter === 'all'
+            ? this._conversations
+            : this._conversations.filter(c => c.protocol === this._filter)
+        ).filter(c => !c.is_broadcast);
+
+        if (dmConvos.length > 0) {
+            const label = document.createElement('div');
+            label.className = 'msg-sidebar__section-label';
+            label.textContent = 'Direct Messages';
+            this._listEl.appendChild(label);
+
+            dmConvos.forEach(convo => {
+                const el = this._buildConvoEl(convo);
+                this._listEl.appendChild(el);
+            });
+        }
+
+        if (filteredChannels.length === 0 && dmConvos.length === 0) {
+            this._listEl.innerHTML = '<div class="msg-chat__empty">No conversations yet</div>';
+        }
+    }
+
+    _channelToConvo(ch) {
+        const existing = this._conversations.find(c => c.node_id === ch.node_id);
+        return {
+            node_id: ch.node_id,
+            node_name: ch.name,
+            protocol: ch.protocol,
+            channel: ch.channel || 0,
+            is_broadcast: true,
+            last_message: existing ? existing.last_message : '',
+            last_timestamp: existing ? existing.last_timestamp : '',
+            unread_count: existing ? existing.unread_count : 0,
+        };
     }
 
     setFilter(protocol) {
@@ -91,18 +134,26 @@ class MessagingContacts {
     _buildConvoEl(convo) {
         const el = document.createElement('div');
         el.className = 'msg-convo';
+        if (convo.is_broadcast) el.classList.add('msg-convo--channel');
         if (convo.node_id === this._activeNodeId) el.classList.add('msg-convo--active');
         el.dataset.nodeId = convo.node_id;
 
-        const iconClass = convo.is_broadcast
-            ? 'msg-convo__icon--bcast'
+        const isChannel = !!convo.is_broadcast;
+        const iconClass = isChannel
+            ? 'msg-convo__icon--channel'
             : convo.protocol === 'meshcore'
                 ? 'msg-convo__icon--mc'
                 : 'msg-convo__icon--mt';
 
-        const iconText = convo.is_broadcast
-            ? 'BC'
+        const iconText = isChannel
+            ? '#'
             : (convo.node_name || '?').slice(0, 2).toUpperCase();
+
+        const displayName = isChannel
+            ? convo.node_name || `Ch ${convo.channel || 0}`
+            : convo.node_name || convo.node_id;
+
+        const protoBadge = convo.protocol === 'meshcore' ? 'MC' : 'MT';
 
         const timeStr = convo.last_timestamp
             ? new Date(convo.last_timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -111,7 +162,7 @@ class MessagingContacts {
         el.innerHTML = `
             <div class="msg-convo__icon ${iconClass}">${iconText}</div>
             <div class="msg-convo__info">
-                <div class="msg-convo__name">${this._esc(convo.node_name || convo.node_id)}</div>
+                <div class="msg-convo__name">${this._esc(displayName)} <span class="msg-convo__proto-badge msg-convo__proto-badge--${convo.protocol === 'meshcore' ? 'mc' : 'mt'}">${protoBadge}</span></div>
                 <div class="msg-convo__preview">${this._esc(convo.last_message || '')}</div>
             </div>
             <div class="msg-convo__meta">

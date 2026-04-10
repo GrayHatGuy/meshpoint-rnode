@@ -79,7 +79,10 @@ CREATE TABLE IF NOT EXISTS messages (
     channel       INTEGER NOT NULL DEFAULT 0,
     timestamp     TEXT NOT NULL,
     status        TEXT NOT NULL DEFAULT 'sent',
-    packet_id     TEXT
+    packet_id     TEXT,
+    rssi          REAL,
+    snr           REAL,
+    rx_count      INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_node ON messages(node_id);
@@ -107,10 +110,21 @@ class DatabaseManager:
     async def _run_migrations(self) -> None:
         cursor = await self._connection.execute("PRAGMA table_info(nodes)")
         columns = {row[1] for row in await cursor.fetchall()}
-
         if "role" not in columns:
             await self._connection.execute("ALTER TABLE nodes ADD COLUMN role TEXT")
             logger.info("Migration: added 'role' column to nodes table")
+
+        cursor = await self._connection.execute("PRAGMA table_info(messages)")
+        msg_cols = {row[1] for row in await cursor.fetchall()}
+        if msg_cols and "rssi" not in msg_cols:
+            await self._connection.execute("ALTER TABLE messages ADD COLUMN rssi REAL")
+            await self._connection.execute("ALTER TABLE messages ADD COLUMN snr REAL")
+            logger.info("Migration: added signal columns to messages table")
+        if msg_cols and "rx_count" not in msg_cols:
+            await self._connection.execute(
+                "ALTER TABLE messages ADD COLUMN rx_count INTEGER NOT NULL DEFAULT 1"
+            )
+            logger.info("Migration: added rx_count column to messages table")
 
     async def disconnect(self) -> None:
         if self._connection:

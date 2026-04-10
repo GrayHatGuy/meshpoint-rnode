@@ -53,6 +53,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         self._subscriptions: list = []
         self._resolved_port: Optional[str] = None
         self._health_task: Optional[asyncio.Task] = None
+        self._last_rf_signal: Optional[SignalMetrics] = None
 
     @property
     def name(self) -> str:
@@ -207,6 +208,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
     async def _on_event(self, event) -> None:
         if not self._running:
             return
+        etype = event.type.value if hasattr(event.type, "value") else str(event.type)
         try:
             self._queue.put_nowait(event)
         except asyncio.QueueFull:
@@ -217,20 +219,46 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         payload_dict = (
             event.payload if isinstance(event.payload, dict) else {}
         )
+        etype = (
+            event.type.value
+            if hasattr(event.type, "value")
+            else str(event.type)
+        )
+
+        signal = _extract_signal(payload_dict)
+
+        if etype == "rx_log_data":
+            if signal.rssi > -119.0:
+                self._last_rf_signal = signal
+            return None
+
+        safe_payload = _make_json_safe(payload_dict)
+
+        if etype in ("channel_message", "contact_message"):
+            if self._last_rf_signal and signal.rssi <= -119.0:
+                safe_payload["RSSI"] = self._last_rf_signal.rssi
+                signal = self._last_rf_signal
+            self._last_rf_signal = None
+
         envelope = {
-            "event_type": (
-                event.type.value
-                if hasattr(event.type, "value")
-                else str(event.type)
-            ),
-            "payload": _make_json_safe(payload_dict),
+            "event_type": etype,
+            "payload": safe_payload,
         }
         return RawCapture(
             payload=json.dumps(envelope).encode("utf-8"),
-            signal=_extract_signal(payload_dict),
+            signal=signal,
             capture_source="meshcore_usb",
             protocol_hint=Protocol.MESHCORE,
         )
+
+    async def restart_auto_fetching(self) -> None:
+        """Re-enable auto message fetching after TX operations."""
+        if self._meshcore and self._connected:
+            try:
+                await self._meshcore.start_auto_message_fetching()
+                logger.info("MeshCore auto message fetching restarted")
+            except Exception:
+                logger.debug("Failed to restart auto fetching", exc_info=True)
 
     async def _resolve_port(self) -> Optional[str]:
         if self._configured_port:

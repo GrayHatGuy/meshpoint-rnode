@@ -138,6 +138,10 @@ class NodeMap {
         this._markers[n.node_id] = marker;
     }
 
+    centerOn(lat, lng, zoom = 15) {
+        if (this._map) this._map.flyTo([lat, lng], zoom);
+    }
+
     updateFromPacket(packet) {
         if (!packet.source_id || !this._initialized) return;
         const marker = this._markers[packet.source_id];

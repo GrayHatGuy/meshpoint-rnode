@@ -9,12 +9,15 @@ same storage, broadcast, and upstream paths as radio-captured packets.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from src.models.packet import Packet, PacketType, Protocol
 from src.models.signal import SignalMetrics
+
+logger = logging.getLogger(__name__)
 
 _EVENT_TYPE_MAP: dict[str, PacketType] = {
     "contact_message": PacketType.TEXT,
@@ -33,6 +36,7 @@ def adapt_event(
     try:
         envelope = json.loads(raw_payload)
     except (json.JSONDecodeError, UnicodeDecodeError):
+        logger.warning("adapt_event: JSON decode failed")
         return None
 
     event_type: str = envelope.get("event_type", "")
@@ -40,21 +44,35 @@ def adapt_event(
 
     builder = _BUILDERS.get(event_type)
     if builder is None:
+        logger.debug("adapt_event: no builder for %s", event_type)
         return None
 
-    return builder(payload, signal)
+    try:
+        return builder(payload, signal)
+    except Exception:
+        logger.exception("adapt_event: builder failed for %s", event_type)
+        return None
 
 
 def _build_contact_message(
     payload: dict, signal: Optional[SignalMetrics]
 ) -> Packet:
+    decoded = {"text": payload.get("text", "")}
+    sender_name = (
+        payload.get("sender_name")
+        or payload.get("contact_name")
+        or payload.get("name")
+        or ""
+    )
+    if sender_name:
+        decoded["long_name"] = sender_name
     return Packet(
         packet_id=_generate_id(),
         source_id=payload.get("pubkey_prefix", "unknown"),
         destination_id="self",
         protocol=Protocol.MESHCORE,
         packet_type=PacketType.TEXT,
-        decoded_payload={"text": payload.get("text", "")},
+        decoded_payload=decoded,
         signal=_rf_signal_from_payload(payload, signal),
         timestamp=_parse_timestamp(payload.get("timestamp")),
         decrypted=True,
@@ -65,16 +83,35 @@ def _build_channel_message(
     payload: dict, signal: Optional[SignalMetrics]
 ) -> Packet:
     channel_idx = payload.get("channel_idx", 0)
+    raw_text = payload.get("text", "")
+
+    sender_name = (
+        payload.get("sender_name")
+        or payload.get("contact_name")
+        or payload.get("name")
+        or ""
+    )
+    text = raw_text
+    if not sender_name and ": " in raw_text:
+        sender_name, text = raw_text.split(": ", 1)
+
+    source_id = payload.get("pubkey_prefix", "")
+    if not source_id and sender_name:
+        source_id = f"mc:{sender_name}"
+    elif not source_id:
+        source_id = "mc:channel"
+
+    decoded = {"text": text, "channel": channel_idx}
+    if sender_name:
+        decoded["long_name"] = sender_name
+
     return Packet(
         packet_id=_generate_id(),
-        source_id="channel",
-        destination_id=f"channel:{channel_idx}",
+        source_id=source_id,
+        destination_id="broadcast",
         protocol=Protocol.MESHCORE,
         packet_type=PacketType.TEXT,
-        decoded_payload={
-            "text": payload.get("text", ""),
-            "channel": channel_idx,
-        },
+        decoded_payload=decoded,
         channel_hash=channel_idx,
         signal=_rf_signal_from_payload(payload, signal),
         timestamp=_parse_timestamp(payload.get("timestamp")),

@@ -106,7 +106,11 @@ class RadioSettings {
         `;
 
         document.getElementById('radio-tx-enabled').addEventListener('change', async (e) => {
-            await this._saveTransmit({ enabled: e.target.checked });
+            const result = await this._putConfig('/api/config/transmit', { enabled: e.target.checked });
+            if (result && result.restart_required) {
+                this._showRestartBar();
+                this._showToast('TX ' + (e.target.checked ? 'enabled' : 'disabled') + '. Restart required.');
+            }
         });
     }
 
@@ -318,7 +322,10 @@ class RadioSettings {
 
     async _saveIdentity(payload) {
         const result = await this._putConfig('/api/config/identity', payload);
-        if (result) this._showToast('Identity saved');
+        if (result) {
+            this._showToast('Identity saved');
+            if (result.restart_required) this._showRestartBar();
+        }
         await this._loadConfig();
     }
 

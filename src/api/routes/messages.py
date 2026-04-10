@@ -12,13 +12,14 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from src.config import AppConfig
 from src.storage.message_repository import (
     BROADCAST_NODE_MC,
     BROADCAST_NODE_MT,
     MessageRepository,
 )
 from src.transmit.meshcore_tx_client import MeshCoreTxClient
-from src.transmit.tx_service import TxService
+from src.transmit.tx_service import PRESET_DISPLAY_NAMES, TxService
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ _tx_service: TxService | None = None
 _message_repo: MessageRepository | None = None
 _node_repo = None
 _meshcore_tx: MeshCoreTxClient | None = None
+_config: AppConfig | None = None
 
 
 def init_routes(
@@ -35,12 +37,14 @@ def init_routes(
     message_repo: MessageRepository,
     node_repo,
     meshcore_tx: MeshCoreTxClient | None = None,
+    config: AppConfig | None = None,
 ) -> None:
-    global _tx_service, _message_repo, _node_repo, _meshcore_tx
+    global _tx_service, _message_repo, _node_repo, _meshcore_tx, _config
     _tx_service = tx_service
     _message_repo = message_repo
     _node_repo = node_repo
     _meshcore_tx = meshcore_tx
+    _config = config
 
 
 class SendRequest(BaseModel):
@@ -123,13 +127,31 @@ async def mark_conversation_read(node_id: str):
 
 @router.get("/channels")
 async def get_channels():
-    channels = []
-    channels.append({
-        "protocol": "meshtastic",
-        "channel": 0,
-        "name": "Default",
-        "node_id": f"{BROADCAST_NODE_MT}:0",
-    })
+    default_name = "LongFast"
+    if _config:
+        sf = _config.radio.spreading_factor
+        bw = int(_config.radio.bandwidth_khz)
+        default_name = PRESET_DISPLAY_NAMES.get((sf, bw), "Custom")
+
+    channels = [
+        {
+            "protocol": "meshtastic",
+            "channel": 0,
+            "name": default_name,
+            "node_id": f"{BROADCAST_NODE_MT}:0",
+        }
+    ]
+
+    if _config:
+        for i, (name, _key) in enumerate(
+            _config.meshtastic.channel_keys.items(), start=1
+        ):
+            channels.append({
+                "protocol": "meshtastic",
+                "channel": i,
+                "name": name,
+                "node_id": f"{BROADCAST_NODE_MT}:{i}",
+            })
 
     if _meshcore_tx and _meshcore_tx.connected:
         channels.append({
@@ -138,6 +160,7 @@ async def get_channels():
             "name": "MeshCore",
             "node_id": f"{BROADCAST_NODE_MC}:0",
         })
+
     return channels
 
 
