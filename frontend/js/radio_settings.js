@@ -144,8 +144,12 @@ class RadioSettings {
 
             if (nodeIdRaw) {
                 const hex = nodeIdRaw.replace(/^!/, '');
+                if (!/^[0-9a-fA-F]{1,8}$/.test(hex)) {
+                    alert('Node ID must be 1-8 hex characters (0-9, a-f). Example: !aabbccdd');
+                    return;
+                }
                 const parsed = parseInt(hex, 16);
-                if (!isNaN(parsed) && parsed > 0) {
+                if (parsed > 0) {
                     identityPayload.node_id = parsed;
                 }
             }
