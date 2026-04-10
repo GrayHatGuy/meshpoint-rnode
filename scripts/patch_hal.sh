@@ -30,7 +30,7 @@ if [ ! -f "$HAL_SRC" ]; then
     fail "HAL source not found at $HAL_SRC. Run install.sh for a fresh build."
 fi
 
-if grep -q "sx1302_tx_sw_peak1" "$HAL_SRC"; then
+if grep -q "PEAK1_POS.*sx1302_tx_sw_peak1" "$HAL_SRC"; then
     info "TX sync word patch already applied"
 else
     info "Applying TX sync word patch..."
