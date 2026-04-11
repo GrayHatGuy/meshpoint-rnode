@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from src.analytics.network_mapper import NetworkMapper
 from src.analytics.signal_analyzer import SignalAnalyzer
 from src.analytics.traffic_monitor import TrafficMonitor
-from src.api.routes import analytics, config_routes, device, messages, nodes, packets, system_metrics, telemetry, update_check
+from src.api.routes import analytics, config_routes, device, messages, nodes, packets, stats_routes, system_metrics, telemetry, update_check
 from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
@@ -70,7 +70,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             pipeline, message_repo, config, meshcore_tx_ref
         )
 
-        upstream = UpstreamClient(config.upstream, identity)
+        upstream = UpstreamClient(
+            config.upstream, identity,
+            stats_reporter=pipeline.stats_reporter,
+        )
         pipeline.on_packet(upstream.send_packet)
         await upstream.start()
 
@@ -97,6 +100,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(update_check.router)
     app.include_router(messages.router)
     app.include_router(config_routes.router)
+    app.include_router(stats_routes.router)
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
@@ -599,6 +603,15 @@ def _init_routes(
     analytics.init_routes(signal_analyzer, traffic_monitor, coord.packet_repo)
     device.init_routes(identity, ws_manager, coord.relay_manager)
     telemetry.init_routes(coord.telemetry_repo)
+    stats_routes.init_routes(
+        stats_reporter=coord.stats_reporter,
+        signal_analyzer=signal_analyzer,
+        traffic_monitor=traffic_monitor,
+        network_mapper=network_mapper,
+        relay_manager=coord.relay_manager,
+        node_repo=coord.node_repo,
+        packet_repo=coord.packet_repo,
+    )
 
     meshcore_tx = None
     if tx_service and hasattr(tx_service, '_meshcore_tx'):

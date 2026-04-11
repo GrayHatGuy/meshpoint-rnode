@@ -29,6 +29,9 @@ class NodeMap {
             maxZoom: 19,
         }).addTo(this._map);
 
+        this._topologyLayer = L.layerGroup();
+        this._topologyVisible = false;
+
         this._markerGroup = L.markerClusterGroup({
             maxClusterRadius: 50,
             disableClusteringAtZoom: 13,
@@ -47,6 +50,22 @@ class NodeMap {
             },
         });
         this._map.addLayer(this._markerGroup);
+
+        const overlays = { 'Topology Links': this._topologyLayer };
+        L.control.layers(null, overlays, { position: 'topright', collapsed: true }).addTo(this._map);
+
+        this._map.on('overlayadd', (e) => {
+            if (e.layer === this._topologyLayer) {
+                this._topologyVisible = true;
+                this._loadTopology();
+            }
+        });
+        this._map.on('overlayremove', (e) => {
+            if (e.layer === this._topologyLayer) {
+                this._topologyVisible = false;
+            }
+        });
+
         this._initialized = true;
     }
 
@@ -178,6 +197,42 @@ class NodeMap {
                 line.setStyle({ opacity });
             }
         }, 200);
+    }
+
+    async _loadTopology() {
+        try {
+            const res = await fetch('/api/analytics/topology');
+            const links = await res.json();
+            this._topologyLayer.clearLayers();
+
+            for (const link of links) {
+                const srcMarker = this._markers[link.source];
+                const tgtMarker = this._markers[link.target];
+                if (!srcMarker || !tgtMarker) continue;
+
+                const line = L.polyline(
+                    [srcMarker.getLatLng(), tgtMarker.getLatLng()],
+                    {
+                        color: '#f59e0b',
+                        weight: 1.5,
+                        opacity: 0.6,
+                        dashArray: '4, 4',
+                    },
+                );
+
+                const rssiLabel = link.rssi != null ? `RSSI: ${link.rssi} dBm` : '';
+                const snrLabel = link.snr != null ? `SNR: ${link.snr} dB` : '';
+                const tooltip = [
+                    `${link.source} ↔ ${link.target}`,
+                    rssiLabel, snrLabel,
+                ].filter(Boolean).join('<br>');
+                line.bindTooltip(tooltip);
+
+                this._topologyLayer.addLayer(line);
+            }
+        } catch (e) {
+            console.error('Topology load failed:', e);
+        }
     }
 
     _esc(str) {
