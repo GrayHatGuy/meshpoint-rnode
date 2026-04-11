@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
+from src.analytics.stats_reporter import StatsReporter
 from src.capture.capture_coordinator import CaptureCoordinator
 from src.config import AppConfig
 from src.decode.crypto_service import CryptoService
@@ -48,11 +49,13 @@ class PipelineCoordinator:
         )
         self._transmitter: Optional[MeshtasticTransmitter] = None
         self._mqtt: Optional[MqttPublisher] = None
+        self._stats_reporter = StatsReporter()
 
         self._node_repo: Optional[NodeRepository] = None
         self._packet_repo: Optional[PacketRepository] = None
         self._telemetry_repo: Optional[TelemetryRepository] = None
 
+        self._last_node_update: dict[str, Any] = {}
         self._on_packet_callbacks: list[Callable[[Packet], None]] = []
         self._running = False
         self._pipeline_task: Optional[asyncio.Task] = None
@@ -87,6 +90,10 @@ class PipelineCoordinator:
     @property
     def relay_manager(self) -> RelayManager:
         return self._relay
+
+    @property
+    def stats_reporter(self) -> StatsReporter:
+        return self._stats_reporter
 
     def on_packet(self, callback: Callable[[Packet], None]) -> None:
         """Register a callback invoked for each decoded packet."""
@@ -182,6 +189,7 @@ class PipelineCoordinator:
         await self._store_packet(packet)
         await self._relay.process_packet(packet)
         self._publish_mqtt(packet)
+        self._record_stats(packet)
         self._notify_callbacks(packet)
 
     @staticmethod
@@ -206,6 +214,8 @@ class PipelineCoordinator:
         node_update = decoder.extract_node_update(packet)
         if node_update:
             await self._node_repo.upsert(node_update)
+            self._last_node_update[node_update.node_id] = node_update
+            self._stats_reporter.record_node(node_update.to_dict())
         elif packet.source_id:
             await self._node_repo.increment_packet_count(packet.source_id)
 
@@ -218,6 +228,38 @@ class PipelineCoordinator:
         telemetry = decoder.extract_telemetry(packet)
         if telemetry:
             await self._telemetry_repo.insert(telemetry)
+
+    def _record_stats(self, packet: Packet) -> None:
+        """Feed the StatsReporter with packet metrics for heartbeat reporting."""
+        rssi = packet.signal.rssi if packet.signal else None
+        snr = packet.signal.snr if packet.signal else None
+        self._stats_reporter.record_packet(
+            protocol=packet.protocol.value,
+            packet_type=packet.packet_type.value,
+            rssi=rssi,
+            snr=snr,
+            hop_start=packet.hop_start,
+            hop_limit=packet.hop_limit,
+        )
+
+        if (
+            packet.signal
+            and packet.source_id
+            and self._config.device.latitude is not None
+            and self._config.device.longitude is not None
+        ):
+            node = self._last_node_update.get(packet.source_id)
+            if node and node.has_position:
+                self._stats_reporter.record_farthest_direct(
+                    source_id=packet.source_id,
+                    rssi=rssi,
+                    device_lat=self._config.device.latitude,
+                    device_lon=self._config.device.longitude,
+                    node_lat=node.latitude,
+                    node_lon=node.longitude,
+                    hop_start=packet.hop_start,
+                    hop_limit=packet.hop_limit,
+                )
 
     def _notify_callbacks(self, packet: Packet) -> None:
         for callback in self._on_packet_callbacks:

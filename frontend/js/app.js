@@ -226,6 +226,9 @@ function _setupTabs() {
             if (tabId === 'radio' && window.radioSettings) {
                 window.radioSettings.onActivated();
             }
+            if (tabId === 'stats' && window.statsTab) {
+                window.statsTab.refresh();
+            }
         });
     });
 }
