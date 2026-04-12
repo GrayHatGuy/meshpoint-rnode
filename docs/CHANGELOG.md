@@ -1,5 +1,23 @@
 # Changelog
 
+### v0.6.1 (April 11, 2026)
+
+- **Local stats dashboard:** new Stats tab on the local dashboard with 12 live Chart.js charts: protocol split, packet types, RSSI distribution, signal quality, direct vs relayed, active nodes, device roles, hardware models, relay decisions, rejection reasons, and traffic timeline. All generated locally, no cloud needed.
+- **Enriched heartbeat:** edge accumulates per-packet stats in memory and sends a batched summary to Meshradar in each heartbeat instead of the cloud processing every individual packet. Same data, significantly fewer backend operations. Savings scale with fleet size.
+- **Local topology layer:** map tab gains a "Topology Links" toggle showing lines between nodes with RSSI/SNR tooltips.
+- **Farthest direct tracking:** tracks the farthest direct (0-hop) node heard, with distance and signal strength, visible on the stats page.
+- **Relay rejection tracking:** relay engine now records why packets are rejected (duplicate, rate limited, type filtered, signal bounds), visible in local stats.
+
+### v0.6.0 (April 8, 2026)
+
+- **Native mesh messaging:** send and receive Meshtastic messages from the browser. Broadcast to LongFast, talk on custom channels, DM individual nodes. MeshCore messaging via USB companion. SX1302 transmits with correct sync word and encryption.
+- **Chat UI:** conversations organized by channel and contact. Signal info on every received bubble. Duplicate badge for relayed messages. History persisted locally.
+- **Radio config from dashboard:** region, modem preset, frequency override, TX power, duty cycle, custom channels with PSKs, and TX toggle. All configurable from the Radio tab without SSH.
+- **Node discovery:** live node cards with name, ID, protocol, hardware model, signal, battery, last seen. Detail drawer with signal history. DM from node card.
+- **Dashboard overhaul:** messaging tab, node cards grid, radio settings page, frequency and SF columns in packet feed.
+- **CLI operational report:** `meshpoint report` command with full-screen terminal dashboard: RX stats, traffic breakdown, signal averages, system metrics, health status.
+- **Setup wizard improvements:** unique random Meshtastic node ID per device (no collisions), MeshCore companion as its own wizard step.
+
 ### v0.5.5 (April 2, 2026)
 
 - **MQTT hotfix:** shipped missing MQTT runtime files (publisher, formatter, pipeline wiring) that were absent from v0.5.4. MQTT config and docs were present but the code was not, so `mqtt.enabled: true` had no effect. Update and restart to activate MQTT publishing.
