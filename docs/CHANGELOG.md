@@ -1,5 +1,12 @@
 # Changelog
 
+### v0.6.2 (April 16, 2026)
+
+- **MQTT channel name fix:** MQTT topics now use the actual channel name (LongFast, MediumFast, ShortFast, etc.) instead of `chXX` hashes. New `ChannelResolver` maps all 8 standard Meshtastic presets and supports user-configured channel keys. ([#20](https://github.com/KMX415/meshpoint/issues/20))
+- **Chat sender names:** received messages now show the sender's node name or hex ID. Previously there was no way to tell who sent what. ([#19](https://github.com/KMX415/meshpoint/issues/19))
+- **Chat day dividers:** messages from different days are separated by date labels (Today, Yesterday, or the date) in the chat window.
+- **Espressif USB udev rule:** installer adds a udev rule so Heltec V3/V4 and T-Beam ESP32-S3 USB serial devices are accessible to the meshpoint service user without manual group changes. ([#12](https://github.com/KMX415/meshpoint/issues/12))
+
 ### v0.6.1 (April 11, 2026)
 
 - **Local stats dashboard:** new Stats tab on the local dashboard with 12 live Chart.js charts: protocol split, packet types, RSSI distribution, signal quality, direct vs relayed, active nodes, device roles, hardware models, relay decisions, rejection reasons, and traffic timeline. All generated locally, no cloud needed.

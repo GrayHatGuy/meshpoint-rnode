@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from src.models.packet import Packet, PacketType
+from src.relay.channel_resolver import ChannelResolver
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +65,7 @@ class MeshtasticMqttFormatter:
 
     def __init__(self, topic_root: str, region: str, gateway_id: str,
                  location_precision: str = "exact",
-                 channel_resolver: Optional["ChannelResolver"] = None):
-        from src.relay.channel_resolver import ChannelResolver
+                 channel_resolver: Optional[ChannelResolver] = None):
         self._topic_root = topic_root
         self._region = region
         self._gateway_id = gateway_id
