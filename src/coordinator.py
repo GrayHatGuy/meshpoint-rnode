@@ -292,7 +292,11 @@ class PipelineCoordinator:
             return
         try:
             device_name = self._config.device.device_name
-            self._mqtt = MqttPublisher(self._config.mqtt, device_name)
+            self._mqtt = MqttPublisher(
+                self._config.mqtt,
+                device_name,
+                channel_keys=self._config.meshtastic.channel_keys or None,
+            )
             if self._mqtt.connect():
                 logger.info(
                     f" {CYAN}--{RESET} {GREEN}MQTT{RESET}     "

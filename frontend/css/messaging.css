@@ -307,6 +307,29 @@
     opacity: 0.8;
 }
 
+/* ── Day separator ────────────────────────────────────────────── */
+
+.msg-day-separator {
+    text-align: center;
+    font-size: 0.6rem;
+    color: var(--text-secondary, #888);
+    margin: 0.75rem 0 0.5rem;
+    position: relative;
+}
+
+.msg-day-separator::before,
+.msg-day-separator::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 30%;
+    height: 1px;
+    background: var(--border-color, #333);
+}
+
+.msg-day-separator::before { left: 5%; }
+.msg-day-separator::after { right: 5%; }
+
 /* ── Signal indicator ──────────────────────────────────────────── */
 
 .msg-signal {

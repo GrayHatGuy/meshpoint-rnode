@@ -11,6 +11,7 @@ class MessagingChat {
         this._messages = [];
         this._loading = false;
         this._allLoaded = false;
+        this._lastDayKey = null;
         this._build();
     }
 
@@ -33,6 +34,7 @@ class MessagingChat {
             (convo.protocol === 'meshcore' ? 'msg-chat__protocol-badge--mc' : 'msg-chat__protocol-badge--mt');
 
         this._messagesEl.innerHTML = '';
+        this._lastDayKey = null;
         this._input.disabled = false;
         this._sendBtn.disabled = false;
         this._input.focus();
@@ -116,6 +118,8 @@ class MessagingChat {
         const empty = this._messagesEl.querySelector('.msg-chat__empty');
         if (empty) empty.remove();
 
+        this._insertDaySeparator(msg.timestamp);
+
         const bubble = document.createElement('div');
         bubble.className = `msg-bubble msg-bubble--${msg.direction}`;
         bubble.dataset.msgId = msg.id;
@@ -128,10 +132,9 @@ class MessagingChat {
             ? ` · ${msg.status}` : '';
 
         let senderHtml = '';
-        if (msg.direction === 'received' && msg.node_name && !this._conversation?.is_broadcast) {
-            senderHtml = '';
-        } else if (msg.direction === 'received' && this._conversation?.is_broadcast && msg.node_name) {
-            senderHtml = `<div class="msg-bubble__sender">${this._esc(msg.node_name || msg.node_id)}</div>`;
+        if (msg.direction === 'received') {
+            const name = msg.node_name || msg.node_id || '';
+            if (name) senderHtml = `<div class="msg-bubble__sender">${this._esc(name)}</div>`;
         }
 
         const signalHtml = this._buildSignalHtml(msg);
@@ -212,10 +215,24 @@ class MessagingChat {
 
             const scrollBefore = this._messagesEl.scrollHeight;
             const frag = document.createDocumentFragment();
+            let prevKey = null;
             older.forEach(msg => {
-                const bubble = this._buildBubbleEl(msg);
-                frag.appendChild(bubble);
+                const key = msg.timestamp ? this._dayKey(msg.timestamp) : null;
+                if (key && key !== prevKey) {
+                    const sep = this._buildDaySeparatorEl(msg.timestamp);
+                    frag.appendChild(sep);
+                    prevKey = key;
+                }
+                frag.appendChild(this._buildBubbleEl(msg));
             });
+
+            const firstExistingKey = this._messages[0]?.timestamp
+                ? this._dayKey(this._messages[0].timestamp) : null;
+            if (prevKey && prevKey === firstExistingKey) {
+                const existingSep = this._messagesEl.querySelector('.msg-day-separator');
+                if (existingSep) existingSep.remove();
+            }
+
             this._messagesEl.prepend(frag);
             this._messages = [...older, ...this._messages];
 
@@ -237,7 +254,15 @@ class MessagingChat {
             ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             : '';
         const signalHtml = this._buildSignalHtml(msg);
+
+        let senderHtml = '';
+        if (msg.direction === 'received') {
+            const name = msg.node_name || msg.node_id || '';
+            if (name) senderHtml = `<div class="msg-bubble__sender">${this._esc(name)}</div>`;
+        }
+
         bubble.innerHTML = `
+            ${senderHtml}
             <div class="msg-bubble__text">${this._esc(msg.text)}</div>
             <div class="msg-bubble__meta">${time}${signalHtml}</div>
         `;
@@ -279,6 +304,72 @@ class MessagingChat {
             ? `<span class="msg-rx-count" title="Received via ${msg.rx_count} RF paths">×${msg.rx_count}</span>`
             : '';
         return `<span class="msg-signal msg-signal--${cls}">${bars}<span class="msg-signal__val">${rssi.toFixed(1)}${snrStr}</span></span>${rxStr}`;
+    }
+
+    _insertDaySeparator(ts) {
+        if (!ts) return;
+        const key = this._dayKey(ts);
+        if (key === this._lastDayKey) return;
+        this._lastDayKey = key;
+
+        const d = new Date(ts);
+        const now = new Date();
+        const sameDay = d.getFullYear() === now.getFullYear()
+            && d.getMonth() === now.getMonth()
+            && d.getDate() === now.getDate();
+
+        let label;
+        if (sameDay) {
+            label = 'Today';
+        } else {
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const sameYesterday = d.getFullYear() === yesterday.getFullYear()
+                && d.getMonth() === yesterday.getMonth()
+                && d.getDate() === yesterday.getDate();
+            if (sameYesterday) {
+                label = 'Yesterday';
+            } else {
+                label = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+            }
+        }
+
+        const div = document.createElement('div');
+        div.className = 'msg-day-separator';
+        div.textContent = label;
+        this._messagesEl.appendChild(div);
+    }
+
+    _buildDaySeparatorEl(ts) {
+        const d = new Date(ts);
+        const now = new Date();
+        const sameDay = d.getFullYear() === now.getFullYear()
+            && d.getMonth() === now.getMonth()
+            && d.getDate() === now.getDate();
+
+        let label;
+        if (sameDay) {
+            label = 'Today';
+        } else {
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const sameYesterday = d.getFullYear() === yesterday.getFullYear()
+                && d.getMonth() === yesterday.getMonth()
+                && d.getDate() === yesterday.getDate();
+            label = sameYesterday
+                ? 'Yesterday'
+                : d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+        }
+
+        const div = document.createElement('div');
+        div.className = 'msg-day-separator';
+        div.textContent = label;
+        return div;
+    }
+
+    _dayKey(ts) {
+        const d = new Date(ts);
+        return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
     }
 
     _esc(str) {

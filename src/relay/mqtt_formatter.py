@@ -63,11 +63,14 @@ class MeshtasticMqttFormatter:
     """
 
     def __init__(self, topic_root: str, region: str, gateway_id: str,
-                 location_precision: str = "exact"):
+                 location_precision: str = "exact",
+                 channel_resolver: Optional["ChannelResolver"] = None):
+        from src.relay.channel_resolver import ChannelResolver
         self._topic_root = topic_root
         self._region = region
         self._gateway_id = gateway_id
         self._location_precision = location_precision
+        self._channel_resolver = channel_resolver or ChannelResolver()
 
     def format(self, packet: Packet) -> Optional[MqttMessage]:
         try:
@@ -188,9 +191,9 @@ class MeshtasticMqttFormatter:
         return result
 
     def _resolve_channel(self, packet: Packet) -> str:
-        if packet.channel_hash == 0 or packet.channel_hash == 8:
-            return "LongFast"
-        return f"ch{packet.channel_hash}"
+        return self._channel_resolver.resolve(
+            packet.channel_hash, packet.protocol
+        )
 
 
 class MeshCoreMqttFormatter:

@@ -391,6 +391,18 @@ usermod -a -G spi,gpio,dialout,i2c meshpoint 2>/dev/null || true
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/data"
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/config"
 
+# Espressif USB serial devices (Heltec V3/V4, T-Beam ESP32-S3) may not
+# default to dialout group on all Pi OS versions. Add a udev rule so
+# the meshpoint service user can access them for relay and MeshCore.
+UDEV_RULE='SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0666"'
+UDEV_FILE="/etc/udev/rules.d/99-meshpoint-esp.rules"
+if [ ! -f "$UDEV_FILE" ]; then
+    info "Installing udev rule for Espressif USB serial devices..."
+    echo "$UDEV_RULE" > "$UDEV_FILE"
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger 2>/dev/null || true
+fi
+
 # Allow service user to restart/stop its own service (dashboard + remote commands)
 info "Installing sudoers rule for service management..."
 cp "${MESHPOINT_DIR}/config/sudoers-meshpoint" /etc/sudoers.d/meshpoint

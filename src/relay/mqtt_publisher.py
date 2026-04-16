@@ -15,6 +15,7 @@ from typing import Optional
 
 from src.config import MqttConfig
 from src.models.packet import Packet, PacketType, Protocol
+from src.relay.channel_resolver import ChannelResolver
 from src.relay.mqtt_formatter import (
     MeshCoreMqttFormatter,
     MeshtasticMqttFormatter,
@@ -41,7 +42,12 @@ class MqttPublisher:
       2) Only packets from whitelisted channels are published
     """
 
-    def __init__(self, config: MqttConfig, device_name: str):
+    def __init__(
+        self,
+        config: MqttConfig,
+        device_name: str,
+        channel_keys: Optional[dict[str, str]] = None,
+    ):
         self._config = config
         self._gateway_id = _generate_gateway_id(device_name)
         self._client: Optional[paho_mqtt.Client] = None
@@ -52,11 +58,14 @@ class MqttPublisher:
             ch.lower() for ch in config.publish_channels
         )
 
+        self._channel_resolver = ChannelResolver(channel_keys=channel_keys)
+
         self._mt_formatter = MeshtasticMqttFormatter(
             topic_root=config.topic_root,
             region=config.region,
             gateway_id=self._gateway_id,
             location_precision=config.location_precision,
+            channel_resolver=self._channel_resolver,
         )
         self._mc_formatter = MeshCoreMqttFormatter(
             topic_root=config.topic_root,
@@ -162,11 +171,9 @@ class MqttPublisher:
         return True
 
     def _resolve_channel_name(self, packet: Packet) -> str:
-        if packet.protocol == Protocol.MESHCORE:
-            return "MeshCore"
-        if packet.channel_hash == 0 or packet.channel_hash == 8:
-            return "LongFast"
-        return f"ch{packet.channel_hash}"
+        return self._channel_resolver.resolve(
+            packet.channel_hash, packet.protocol
+        )
 
     def _format_packet(self, packet: Packet) -> list[MqttMessage]:
         messages: list[MqttMessage] = []
