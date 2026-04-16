@@ -133,7 +133,8 @@ class MessagingChat {
 
         let senderHtml = '';
         if (msg.direction === 'received') {
-            const name = msg.node_name || msg.node_id || '';
+            let name = msg.node_name || msg.node_id || '';
+            if (name.startsWith('broadcast:')) name = '';
             if (name) senderHtml = `<div class="msg-bubble__sender">${this._esc(name)}</div>`;
         }
 
@@ -257,7 +258,8 @@ class MessagingChat {
 
         let senderHtml = '';
         if (msg.direction === 'received') {
-            const name = msg.node_name || msg.node_id || '';
+            let name = msg.node_name || msg.node_id || '';
+            if (name.startsWith('broadcast:')) name = '';
             if (name) senderHtml = `<div class="msg-bubble__sender">${this._esc(name)}</div>`;
         }
 

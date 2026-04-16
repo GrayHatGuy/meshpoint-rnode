@@ -483,6 +483,23 @@ def _setup_message_interception(
                 if resolved_name and not node_name:
                     node_name = resolved_name
                 node_id = _normalize_mc_node_id(node_id)
+            if (
+                is_broadcast
+                and packet.protocol == Protocol.MESHTASTIC
+                and not node_name
+            ):
+                src_id = (packet.source_id or "").lower()
+                if src_id:
+                    row = await coord.node_repo._db.fetch_one(
+                        "SELECT long_name, short_name FROM nodes "
+                        "WHERE LOWER(node_id) = ? AND protocol = 'meshtastic'",
+                        (src_id,),
+                    )
+                    if row:
+                        node_name = row["long_name"] or row["short_name"] or ""
+                    if not node_name:
+                        node_name = packet.source_id or ""
+
             if is_broadcast and packet.protocol == Protocol.MESHCORE:
                 node_name = (packet.decoded_payload or {}).get("long_name", "")
 

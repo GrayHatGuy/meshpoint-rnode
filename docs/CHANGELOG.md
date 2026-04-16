@@ -1,5 +1,10 @@
 # Changelog
 
+### v0.6.4 (April 16, 2026)
+
+- **Meshtastic broadcast sender names:** received messages on public channels (LongFast, etc.) now show the sending node's long name, short name, or hex ID. Previously the UI showed the conversation key (`broadcast:meshtastic:0`) in place of the sender because the backend never resolved the source node for Meshtastic broadcast text packets. The v0.6.2 sender-name fix only covered MeshCore; this finishes the job for Meshtastic. ([#19](https://github.com/KMX415/meshpoint/issues/19))
+- **Defensive frontend filter:** chat UI no longer renders strings starting with `broadcast:` as a sender label if they ever slip through.
+
 ### v0.6.3 (April 16, 2026)
 
 - **TX channel hash fix:** messages sent from the dashboard were going out with hash 0x02 (invisible to the mesh) instead of the correct 0x08. The primary channel name defaulted to blank, producing the wrong hash. Now defaults to "LongFast" matching Meshtastic firmware. ([#21](https://github.com/KMX415/meshpoint/issues/21))
