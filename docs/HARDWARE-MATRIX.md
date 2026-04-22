@@ -81,6 +81,24 @@ Flash the radio with the **`companion_radio_usb`** firmware variant from
 into the Pi. The setup wizard auto-detects the device and configures its
 frequency to match your region.
 
+### Why a USB companion instead of the SX1302 concentrator?
+
+MeshCore on most regions uses a **62.5 kHz LoRa bandwidth**. The SX1302
+concentrator inside every supported Meshpoint (RAK V2, SenseCap M1,
+RAK2287 DIY) cannot tune below **125 kHz**. That is a hardware limitation
+of the SX1302 baseband, not a software gap, so MeshCore packets at
+62.5 kHz are physically invisible to the concentrator no matter how it is
+configured.
+
+The single-channel SX1262 inside a USB companion radio (Heltec V3/V4,
+T-Beam, etc.) operates well below 125 kHz, so it has no problem
+demodulating MeshCore at 62.5 kHz. Meshpoint then decodes those packets
+natively through its MeshCore decoder. If MeshCore networks in your area
+ever migrate to 125 kHz or wider, the SX1302 will be able to receive them
+directly and the USB companion becomes optional. See
+[ROADMAP](../ROADMAP.md) for the status of dual-protocol HAL work that
+would enable that path.
+
 | Device | Chipset | Notes |
 |---|---|---|
 | Heltec LoRa V3 | ESP32-S3 | Common, inexpensive, validated |

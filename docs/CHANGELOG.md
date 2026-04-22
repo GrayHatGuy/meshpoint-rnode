@@ -3,6 +3,7 @@
 ### Unreleased (docs only)
 
 - **Support documentation expansion:** new `docs/FAQ.md`, `docs/HARDWARE-MATRIX.md`, `docs/COMMON-ERRORS.md`, `docs/RADIO-CONFIG-EXPLAINED.md`, and `docs/MQTT-AND-MESHRADAR.md`. README "Support and documentation" section reorganized into Setup/When-something-goes-wrong/Project groups. No code changes, no version bump.
+- **SX1302 minimum bandwidth documented:** `docs/HARDWARE-MATRIX.md` and `docs/RADIO-CONFIG-EXPLAINED.md` now explain that the SX1302 concentrator cannot tune below 125 kHz, which is why MeshCore (62.5 kHz) requires a USB companion radio for RX. Closes a gap that previously had no documented answer.
 
 ### v0.6.4 (April 16, 2026)
 

@@ -64,6 +64,7 @@ signal across more spectrum, raising the noise floor seen by the demodulator.
 
 | BW (kHz) | Notes |
 |---|---|
+| 62.5 | Used by MeshCore on most regions. **Not receivable on the SX1302 concentrator** (see note below); requires a USB companion radio |
 | 125 | Narrower, slower, slightly more sensitive at the same SF |
 | 250 | Meshtastic standard for most presets |
 | 500 | Wider, faster, **required for non-hopping operation under FCC Part 15 in the 902-928 MHz band** |
@@ -71,6 +72,14 @@ signal across more spectrum, raising the noise floor seen by the demodulator.
 US Part 15 is the practical reason most US Meshpoints stay on BW 250 by
 default (LongFast preset) and only move to BW 500 when running a non-hopping
 custom slot.
+
+### SX1302 minimum bandwidth
+
+The SX1302 concentrator used by every Meshpoint platform (RAK V2, SenseCap
+M1, RAK2287 DIY) has a hardware floor of **125 kHz**. Anything narrower
+(notably MeshCore's default 62.5 kHz) cannot be demodulated regardless of
+`bandwidth_khz` setting. For sub-125 kHz signals use a
+[USB companion radio](HARDWARE-MATRIX.md#meshcore-usb-companion-radios).
 
 ---
 
