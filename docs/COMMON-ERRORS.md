@@ -470,3 +470,64 @@ a previous hard power cut.
 2. After reboot, full power cycle: `sudo poweroff`, wait for green LED,
    unplug 10+ seconds, plug back in.
 3. Re-run `sudo meshpoint setup`.
+
+---
+
+## WiFi and networking
+
+### Pi is rebooting on its own every ~12 minutes
+
+**Cause:** The network watchdog used to escalate to a full system reboot
+after 6 consecutive failed pings (about 12 minutes). On networks where
+the gateway blocks ICMP, this caused infinite reboot loops.
+
+**Fix:** Update to v0.6.5 or later:
+
+```bash
+cd /opt/meshpoint
+sudo git pull origin main
+sudo systemctl restart network-watchdog
+```
+
+v0.6.5 falls back to pinging `8.8.8.8` when the gateway does not reply,
+and disables auto-reboot by default. Stage 1 recovery (interface restart
+at 3 failures) is unchanged. See [Network Watchdog](NETWORK-WATCHDOG.md)
+for the full picture and how to re-enable auto-reboot if you want it.
+
+### `network-watchdog` service is `failed` or `inactive`
+
+**Cause:** The service unit was not installed, or the script was edited
+in a way that prevents it from starting.
+
+**Fix:**
+
+```bash
+sudo systemctl status network-watchdog
+sudo journalctl -u network-watchdog -n 50
+```
+
+If the unit file is missing entirely, re-run the installer:
+
+```bash
+sudo bash /opt/meshpoint/scripts/install.sh
+```
+
+The main meshpoint service does not depend on the watchdog. A failed
+watchdog will not affect packet capture or the dashboard, only WiFi
+auto-recovery.
+
+### WiFi keeps dropping and the watchdog cannot fix it
+
+**Cause:** Stage 1 recovery (`ip link set wlan0 down/up`) handles wedged
+drivers and lost associations, but cannot fix bad credentials, weak
+signal, or a router that is itself down.
+
+**Fix:**
+
+1. Confirm signal: `iwconfig wlan0` (look at `Link Quality` and `Signal level`).
+2. Confirm credentials: `sudo nmcli connection show` and inspect the
+   active profile. If the SSID password changed, update with
+   `sudo nmcli connection modify <name> wifi-sec.psk <new-pw>`.
+3. Move the Pi closer to the access point as a test.
+4. If the router itself is the problem, the watchdog cannot help. See
+   [Network Watchdog > When the watchdog will not help](NETWORK-WATCHDOG.md#when-the-watchdog-will-not-help).
