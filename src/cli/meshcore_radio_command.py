@@ -233,28 +233,45 @@ def _reboot_and_redetect(original_port: str) -> str:
         new_port = original_port
 
     if new_port != original_port:
+        # The kernel often assigns a different /dev/tty* number while the
+        # old device node is still being torn down (e.g. ACM0 -> ACM1 on
+        # Heltec V4). That new number is transient: after the Pi reboots
+        # we recommend next, the USB stack starts fresh and the device
+        # almost always re-enumerates back to the original number. So
+        # pinning the transient number into local.yaml is exactly the
+        # wrong move -- it leaves meshpoint pointed at a path that no
+        # longer exists post-reboot. Switch to auto-detect instead so
+        # the source finds the companion wherever it lands.
         print(f"  Device moved from {original_port} to {new_port}")
-        _update_config_port(new_port)
+        _enable_auto_detect()
 
     print()
 
     return new_port
 
 
-def _update_config_port(new_port: str) -> None:
-    """Patch the meshcore_usb serial_port in local.yaml."""
+def _enable_auto_detect() -> None:
+    """Switch meshcore_usb to auto-detect and clear any pinned port.
+
+    This is the durable fix for ACM-number drift during companion
+    reboots. The runtime source will scan for MeshCore-compatible USB
+    devices on startup and pick whichever one shows up.
+    """
     if not _LOCAL_CONFIG_PATH.exists():
         return
 
     with open(_LOCAL_CONFIG_PATH) as fh:
         config = yaml.safe_load(fh) or {}
 
-    mc_usb = config.get("capture", {}).get("meshcore_usb", {})
-    old_port = mc_usb.get("serial_port")
-    if old_port == new_port:
+    mc_usb = config.get("capture", {}).get("meshcore_usb", {}) or {}
+
+    already_auto = mc_usb.get("auto_detect", False) is True
+    no_pinned_port = mc_usb.get("serial_port") in (None, "")
+    if already_auto and no_pinned_port:
         return
 
-    mc_usb["serial_port"] = new_port
+    mc_usb["auto_detect"] = True
+    mc_usb.pop("serial_port", None)
     config.setdefault("capture", {})["meshcore_usb"] = mc_usb
 
     updated_yaml = yaml.dump(config, default_flow_style=False, sort_keys=False)
@@ -273,4 +290,4 @@ def _update_config_port(new_port: str) -> None:
         )
         Path(tmp_path).unlink(missing_ok=True)
 
-    print(f"  Updated config/local.yaml: meshcore_usb port -> {new_port}")
+    print("  Updated config/local.yaml: meshcore_usb -> auto_detect (port unpinned)")
