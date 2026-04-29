@@ -273,6 +273,7 @@
 }
 
 @media (max-width: 768px) {
+    .stats-panel { padding: 1rem; }
     .stats-strip { grid-template-columns: 1fr 1fr; }
     .stats-signal-nums { grid-template-columns: 1fr 1fr; }
     .stats-row { grid-template-columns: 1fr; }
@@ -280,7 +281,10 @@
 }
 
 @media (max-width: 480px) {
+    .stats-panel { padding: 0.75rem; }
     .stats-hero__number { font-size: 36px; }
+    .stats-strip { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stats-strip__card { padding: 12px; }
     .stats-strip__value { font-size: 18px; }
     .stats-range-card__miles { font-size: 22px; }
 }

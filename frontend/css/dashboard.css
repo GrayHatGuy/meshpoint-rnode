@@ -477,13 +477,4 @@ html, body {
 
 .packet-row--new { animation: packetFlash 1s ease-out; }
 
-/* ---- Responsive ---- */
-@media (max-width: 1024px) {
-    .dashboard__main { grid-template-columns: 1fr; }
-    .dashboard__side { max-height: 300px; }
-    .dashboard { height: auto; overflow: auto; }
-}
-
-@media (max-width: 640px) {
-    .top-bar { flex-direction: column; gap: 0.5rem; }
-}
+/* Responsive overrides for this file live in css/responsive.css. */
