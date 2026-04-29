@@ -303,13 +303,13 @@ def _step_location(
     print("        Enter coordinates manually (used for map placement).")
     print("        Tip: in Google Maps, right-click any location and click")
     print("        the coordinates at the top of the menu to copy them.")
-    print("        They copy in decimal format (e.g. 42.3601, -71.0589).")
+    print("        They copy in decimal format (e.g. 40.7128, -74.0060).")
     if cur_lat is not None and cur_lon is not None:
         print(f"        Current: {cur_lat}, {cur_lon}")
     print()
 
-    lat = _prompt_float_with_default("Latitude (e.g. 42.3601):", cur_lat)
-    lon = _prompt_float_with_default("Longitude (e.g. -71.0589):", cur_lon)
+    lat = _prompt_float_with_default("Latitude (e.g. 40.7128):", cur_lat)
+    lon = _prompt_float_with_default("Longitude (e.g. -74.0060):", cur_lon)
     alt = _prompt_float_with_default(
         "Altitude in meters (or Enter to skip):", cur_alt, required=False
     )

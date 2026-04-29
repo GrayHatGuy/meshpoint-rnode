@@ -267,8 +267,8 @@ Access at `http://<pi-ip>:8080`. Bind to `127.0.0.1` to restrict to local access
 ```yaml
 device:
   device_name: "My Meshpoint"
-  latitude: 42.3601
-  longitude: -71.0589
+  latitude: 40.7128
+  longitude: -74.0060
   altitude: 25
 ```
 
@@ -293,7 +293,7 @@ Two options:
    sudo systemctl restart meshpoint
    ```
 
-**Tip**: in Google Maps, right-click any location and click the coordinates at the top of the menu to copy them in decimal format (e.g. `42.3601, -71.0589`).
+**Tip**: in Google Maps, right-click any location and click the coordinates at the top of the menu to copy them in decimal format (e.g. `40.7128, -74.0060`).
 
 ---
 
