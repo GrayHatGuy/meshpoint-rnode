@@ -29,6 +29,7 @@ class RadioNodeInfoCard {
         this._api = api;
         this._root = null;
         this._timer = null;
+        this._zeroSince = null;
         this._state = {
             interval_minutes: 0,
             running: false,
@@ -80,7 +81,7 @@ class RadioNodeInfoCard {
                 <button class="r-btn r-btn--secondary"
                         id="r-ni-send-now">Send Now</button>
                 <button class="r-btn r-btn--primary"
-                        id="r-ni-save">Save Cadence</button>
+                        id="r-ni-save">Save NodeInfo</button>
             </div>
         `;
         this._renderChips();
@@ -93,6 +94,7 @@ class RadioNodeInfoCard {
         this._state.running = !!ni.running;
         this._state.last_sent_at = _parseTimestamp(ni.last_sent_at);
         this._state.next_due_at = _parseTimestamp(ni.next_due_at);
+        this._zeroSince = null;
 
         this._root.querySelector('#r-ni-input').value = String(this._state.interval_minutes);
         this._setActiveChip(this._state.interval_minutes);
@@ -259,11 +261,32 @@ class RadioNodeInfoCard {
             valueEl.textContent = remaining === 0
                 ? 'broadcasting...'
                 : _formatCountdown(remaining);
+            if (remaining === 0) {
+                this._scheduleBroadcastRefresh();
+            }
         }
 
         lastEl.textContent = this._state.last_sent_at
             ? _formatAgo(_secondsAgo(this._state.last_sent_at))
             : 'never';
+    }
+
+    _scheduleBroadcastRefresh() {
+        if (this._zeroSince !== null) return;
+        this._zeroSince = Date.now();
+        const refreshOnce = async () => {
+            try {
+                await this._api.refresh();
+            } catch (_e) { /* swallow; backstop will retry */ }
+        };
+        // Wait ~2.5s for the backend broadcaster to complete TX (~700ms
+        // airtime + Lambda/handler overhead), then re-fetch state. A
+        // backstop refresh at +5s catches the rare case where the first
+        // call races the backend's _last_sent_at write.
+        setTimeout(refreshOnce, 2500);
+        setTimeout(() => {
+            if (this._zeroSince !== null) refreshOnce();
+        }, 5000);
     }
 }
 
