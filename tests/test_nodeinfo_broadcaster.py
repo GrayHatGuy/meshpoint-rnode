@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 from src.transmit.nodeinfo_broadcaster import (
@@ -413,6 +414,87 @@ class TestNodeInfoBroadcasterHotReload(unittest.IsolatedAsyncioTestCase):
             b._interval_changed.set()
             await asyncio.sleep(0.05)
             self.assertGreater(len(tx.calls), initial_calls)
+        finally:
+            await b.stop()
+
+    async def test_pause_during_startup_delay_transitions_cleanly(self):
+        """set_interval(0) during the initial startup delay should
+        wake the loop and transition to paused; no broadcasts fire."""
+        tx = _FakeTxService(results=[_ok()] * 10)
+        b = NodeInfoBroadcaster(
+            tx, "Long", "SHRT",
+            startup_delay_seconds=10,
+            interval_seconds=10_000,
+        )
+        await b.start()
+        try:
+            await asyncio.sleep(0.02)
+            self.assertEqual(len(tx.calls), 0)
+            b.set_interval(0)
+            await asyncio.sleep(0.05)
+            self.assertEqual(len(tx.calls), 0)
+            self.assertEqual(b.interval_seconds, 0)
+        finally:
+            await b.stop()
+
+    async def test_resume_during_startup_delay_fires_immediately(self):
+        """Pausing then resuming during the startup delay should not
+        wait out the original startup deadline; it should fire ASAP."""
+        tx = _FakeTxService(results=[_ok()] * 10)
+        b = NodeInfoBroadcaster(
+            tx, "Long", "SHRT",
+            startup_delay_seconds=10,
+            interval_seconds=10_000,
+        )
+        await b.start()
+        try:
+            await asyncio.sleep(0.02)
+            b.set_interval(0)
+            await asyncio.sleep(0.02)
+            b.set_interval(5)
+            await asyncio.sleep(0.05)
+            self.assertGreaterEqual(len(tx.calls), 1)
+        finally:
+            await b.stop()
+
+    async def test_change_interval_during_startup_delay_fires_immediately(self):
+        """Changing the interval during startup delay (no pause) also
+        wakes the loop and fires the first broadcast right away."""
+        tx = _FakeTxService(results=[_ok()] * 10)
+        b = NodeInfoBroadcaster(
+            tx, "Long", "SHRT",
+            startup_delay_seconds=10,
+            interval_seconds=10_000,
+        )
+        await b.start()
+        try:
+            await asyncio.sleep(0.02)
+            self.assertEqual(len(tx.calls), 0)
+            b.set_interval(5)
+            await asyncio.sleep(0.05)
+            self.assertGreaterEqual(len(tx.calls), 1)
+        finally:
+            await b.stop()
+
+    async def test_next_due_re_anchors_after_resume_in_startup_window(self):
+        """next_due_at should reflect "imminent" after resume from
+        pause during the pre-first-broadcast window, not the stale
+        original startup deadline."""
+        tx = _FakeTxService(results=[_ok()] * 10)
+        b = NodeInfoBroadcaster(
+            tx, "Long", "SHRT",
+            startup_delay_seconds=10_000,
+            interval_seconds=0,
+        )
+        await b.start()
+        try:
+            await asyncio.sleep(0.02)
+            self.assertIsNone(b.next_due_at)
+            b.set_interval(5)
+            now = datetime.now(timezone.utc)
+            self.assertIsNotNone(b.next_due_at)
+            delta = (b.next_due_at - now).total_seconds()
+            self.assertLess(abs(delta), 1.0)
         finally:
             await b.stop()
 

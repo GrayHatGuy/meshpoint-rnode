@@ -173,6 +173,12 @@ class NodeInfoBroadcaster:
         broadcast fires at ``last_sent_at + new_interval`` (or right
         away if that's already in the past).
 
+        Calls during the pre-first-broadcast window (startup delay
+        still elapsing, or paused-since-boot with no broadcasts yet)
+        re-anchor ``_started_at`` so the dashboard countdown reflects
+        "broadcast imminent" instead of continuing to count toward
+        the original startup deadline.
+
         Safe to call from any context (sync or async). The loop wakes
         via an :class:`asyncio.Event` so there's no busy polling.
         """
@@ -183,6 +189,15 @@ class NodeInfoBroadcaster:
             logger.info(
                 "NodeInfo interval hot-reloaded: %ds -> %ds",
                 previous, self._interval,
+            )
+        if (
+            self._interval > 0
+            and self._last_sent_at is None
+            and self._started_at is not None
+        ):
+            self._started_at = (
+                datetime.now(timezone.utc)
+                - timedelta(seconds=self._startup_delay)
             )
         self._interval_changed.set()
         return clamped
@@ -212,7 +227,15 @@ class NodeInfoBroadcaster:
 
     async def _loop(self) -> None:
         try:
-            await asyncio.sleep(self._startup_delay)
+            if self._startup_delay > 0:
+                self._interval_changed.clear()
+                try:
+                    await asyncio.wait_for(
+                        self._interval_changed.wait(),
+                        timeout=self._startup_delay,
+                    )
+                except asyncio.TimeoutError:
+                    pass
             while self._running:
                 if self._interval == 0:
                     self._interval_changed.clear()
