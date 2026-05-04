@@ -441,7 +441,7 @@ html, body {
 }
 
 .relay-hop {
-    color: var(--accent-yellow, #f0c040);
+    color: var(--accent-amber);
     font-size: 0.85em;
     opacity: 0.85;
 }

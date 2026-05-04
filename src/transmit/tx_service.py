@@ -28,7 +28,7 @@ RESERVED_NODE_IDS: frozenset[int] = frozenset({0x00000000, 0xFFFFFFFF})
 PORTNUM_NODEINFO = 4
 HW_MODEL_PRIVATE_HW = 255
 HW_MODEL_PORTDUINO = 37
-NODEINFO_HOP_LIMIT = 3
+DEFAULT_HOP_LIMIT = 3
 
 PRESET_DISPLAY_NAMES: dict[tuple[int, int], str] = {
     (7, 250): "ShortFast",
@@ -160,7 +160,7 @@ class TxService:
         channel_hash, channel_key = self._resolve_channel(0)
 
         try:
-            nodeinfo_hop_limit = self._config.hop_limit if self._config else NODEINFO_HOP_LIMIT
+            nodeinfo_hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
             packet_bytes = builder.build_nodeinfo(
                 source_id=self._source_node_id,
                 packet_id=packet_id,
@@ -252,7 +252,7 @@ class TxService:
         packet_id = self._next_packet_id()
         channel_hash, channel_key = self._resolve_channel(channel)
 
-        hop_limit = self._config.hop_limit if self._config else 3
+        hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
         packet_bytes = builder.build_text_message(
             text=text,
             dest=dest_int,
