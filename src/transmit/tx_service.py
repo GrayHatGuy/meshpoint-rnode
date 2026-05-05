@@ -160,6 +160,7 @@ class TxService:
         channel_hash, channel_key = self._resolve_channel(0)
 
         try:
+            nodeinfo_hop_limit = self._config.hop_limit if self._config else NODEINFO_HOP_LIMIT
             packet_bytes = builder.build_nodeinfo(
                 source_id=self._source_node_id,
                 packet_id=packet_id,
@@ -168,8 +169,8 @@ class TxService:
                 hw_model=hw_model,
                 channel_key=channel_key,
                 channel_hash=channel_hash,
-                hop_limit=NODEINFO_HOP_LIMIT,
-                hop_start=NODEINFO_HOP_LIMIT,
+                hop_limit=nodeinfo_hop_limit,
+                hop_start=nodeinfo_hop_limit,
             )
         except Exception as exc:
             logger.exception("NodeInfo build failed")
@@ -251,6 +252,7 @@ class TxService:
         packet_id = self._next_packet_id()
         channel_hash, channel_key = self._resolve_channel(channel)
 
+        hop_limit = self._config.hop_limit if self._config else 3
         packet_bytes = builder.build_text_message(
             text=text,
             dest=dest_int,
@@ -258,8 +260,8 @@ class TxService:
             packet_id=packet_id,
             channel_key=channel_key,
             channel_hash=channel_hash,
-            hop_limit=3,
-            hop_start=3,
+            hop_limit=hop_limit,
+            hop_start=hop_limit,
             want_ack=want_ack,
         )
         if packet_bytes is None:
