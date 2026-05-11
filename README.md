@@ -143,7 +143,9 @@ Open `http://<pi-ip>:8080` for the local dashboard.
 
 ### RNode Options:
 
-To add RNode devices - disclaimer still in test mode and it does not send lxmf messages only captrures RX states from RNode [announces, msg, etc] - TX will be later... *This code was LLM agent assitsted*
+To add RNode devices:
+*(disclaimer still in test mode and it does not send lxmf messages only captrures RX states from RNode [announces, msg, etc] - TX will be later...)* 
+*This code was LLM agent assitsted*
 
 Basic gist:
 - Program RNodefirmware.ino etc
