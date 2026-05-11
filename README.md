@@ -187,7 +187,8 @@ meshpoint reboot
 └──────────┘    └──────────┘    │      ▲           │       │
                                 │      │       Dashboard   │
 ┌──────────┐    ┌──────────┐    │   Messages    (port 8080)│
-│ MeshCore │    │  Heltec  │    │   + Chat UI              │
+│ MeshCore
+ │ or Rnode │  Heltec/Rnode  │    │   + Chat UI              │
 │ packets  │◀──▶│  USB     │◀──▶│                          │
 │ (OTA)    │    │companion │    │                          │
 └──────────┘    └──────────┘    └─────────────────────────┘
