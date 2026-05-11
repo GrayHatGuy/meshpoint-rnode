@@ -126,7 +126,7 @@ Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://f
 
 ```bash
 sudo apt update && sudo apt install -y git
-sudo git clone https://github.com/KMX415/meshpoint.git /opt/meshpoint
+sudo git clone https://github.com/GrayHatGuy/meshpoint.git /opt/meshpoint
 cd /opt/meshpoint && sudo bash scripts/install.sh
 ```
 
