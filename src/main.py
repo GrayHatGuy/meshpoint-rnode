@@ -59,6 +59,28 @@ def _add_meshcore_usb_source(coordinator: PipelineCoordinator, config) -> None:
         )
 
 
+def _add_rnode_usb_source(coordinator: PipelineCoordinator, config) -> None:
+    try:
+        from src.capture.rnode_source import RnodeCaptureSource
+        rnode_cfg = config.capture.rnode_usb
+        coordinator.capture_coordinator.add_source(
+            RnodeCaptureSource(
+                serial_port=rnode_cfg.serial_port,
+                baud_rate=rnode_cfg.baud_rate,
+                frequency_hz=rnode_cfg.frequency_hz,
+                bandwidth_hz=rnode_cfg.bandwidth_hz,
+                spreading_factor=rnode_cfg.spreading_factor,
+                coding_rate=rnode_cfg.coding_rate,
+                tx_power=rnode_cfg.tx_power,
+                auto_detect=rnode_cfg.auto_detect,
+            )
+        )
+    except ImportError:
+        logger.warning(
+            "RNode USB unavailable -- pyserial package not installed"
+        )
+
+
 async def run_standalone() -> None:
     """Run the pipeline without the web dashboard (CLI mode)."""
     config = load_config()
@@ -72,12 +94,20 @@ async def run_standalone() -> None:
             _add_concentrator_source(coordinator, config)
         elif source_name == "meshcore_usb":
             _add_meshcore_usb_source(coordinator, config)
+        elif source_name == "rnode_usb":
+            _add_rnode_usb_source(coordinator, config)
 
     if (
         "meshcore_usb" not in config.capture.sources
         and config.capture.meshcore_usb.auto_detect
     ):
         _add_meshcore_usb_source(coordinator, config)
+
+    if (
+        "rnode_usb" not in config.capture.sources
+        and config.capture.rnode_usb.auto_detect
+    ):
+        _add_rnode_usb_source(coordinator, config)
 
     coordinator.on_packet(lambda pkt: print_packet(pkt))
     await coordinator.start()

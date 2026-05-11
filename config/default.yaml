@@ -28,6 +28,15 @@ capture:
     serial_port: null
     baud_rate: 115200
     auto_detect: true
+  rnode_usb:
+    serial_port: null       # blank = auto-detect
+    baud_rate: 115200
+    frequency_hz: 915000000 # 915 MHz US; 868000000 EU; 433000000 Asia
+    bandwidth_hz: 125000
+    spreading_factor: 7
+    coding_rate: 5
+    tx_power: 17            # required for RNode init; TX is never invoked
+    auto_detect: true
 
 storage:
   database_path: "data/concentrator.db"

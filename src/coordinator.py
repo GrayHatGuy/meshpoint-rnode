@@ -23,6 +23,7 @@ _SOURCE_LABELS = {
     "concentrator": "concentrator (8-ch SX1302)",
     "serial": "serial radio",
     "meshcore_usb": "MeshCore USB node",
+    "rnode_usb": "RNode USB (Reticulum)",
     "mock": "mock source",
 }
 
@@ -166,6 +167,8 @@ class PipelineCoordinator:
     async def _process_capture(self, raw: RawCapture) -> None:
         if raw.capture_source == "meshcore_usb":
             packet = self._adapt_meshcore_usb(raw)
+        elif raw.capture_source == "rnode_usb":
+            packet = self._adapt_rnode_usb(raw)
         else:
             packet = self._router.decode(
                 raw.payload, signal=raw.signal, protocol_hint=raw.protocol_hint
@@ -183,6 +186,11 @@ class PipelineCoordinator:
         from src.decode.meshcore_event_adapter import adapt_event
         return adapt_event(raw.payload, signal=raw.signal)
 
+    @staticmethod
+    def _adapt_rnode_usb(raw: RawCapture) -> Optional[Packet]:
+        from src.decode.rnode_event_adapter import adapt_frame
+        return adapt_frame(raw.payload, signal=raw.signal)
+
     async def _store_packet(self, packet: Packet) -> None:
         try:
             await self._packet_repo.insert(packet)
@@ -192,18 +200,22 @@ class PipelineCoordinator:
             logger.exception("Failed to store packet %s", packet.packet_id)
 
     async def _update_node(self, packet: Packet) -> None:
-        decoder = (
-            self._router.meshtastic_decoder
-            if packet.protocol == Protocol.MESHTASTIC
-            else self._router.meshcore_decoder
-        )
-        node_update = decoder.extract_node_update(packet)
+        if packet.protocol == Protocol.RETICULUM:
+            from src.decode.rnode_decoder import RnodeDecoder
+            node_update = RnodeDecoder().extract_node_update(packet)
+        elif packet.protocol == Protocol.MESHTASTIC:
+            node_update = self._router.meshtastic_decoder.extract_node_update(packet)
+        else:
+            node_update = self._router.meshcore_decoder.extract_node_update(packet)
+
         if node_update:
             await self._node_repo.upsert(node_update)
-        elif packet.source_id:
+        elif packet.source_id and packet.source_id != "unknown":
             await self._node_repo.increment_packet_count(packet.source_id)
 
     async def _store_telemetry(self, packet: Packet) -> None:
+        if packet.protocol == Protocol.RETICULUM:
+            return  # Reticulum telemetry requires app-layer decryption
         decoder = (
             self._router.meshtastic_decoder
             if packet.protocol == Protocol.MESHTASTIC

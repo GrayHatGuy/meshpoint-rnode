@@ -46,12 +46,31 @@ class MeshcoreUsbConfig:
 
 
 @dataclass
+class RnodeUsbConfig:
+    """RNode USB capture for Reticulum network monitoring (receive-only).
+
+    Radio parameters must match the target Reticulum network.  Defaults
+    are for the US 915 MHz ISM band with conservative LoRa settings.
+    """
+
+    serial_port: Optional[str] = None
+    baud_rate: int = 115200
+    frequency_hz: int = 915_000_000
+    bandwidth_hz: int = 125_000
+    spreading_factor: int = 7
+    coding_rate: int = 5
+    tx_power: int = 17          # required by RNode init; TX is never invoked
+    auto_detect: bool = True
+
+
+@dataclass
 class CaptureConfig:
     sources: list[str] = field(default_factory=lambda: ["mock"])
     serial_port: Optional[str] = None
     serial_baud: int = 115200
     concentrator_spi_device: str = "/dev/spidev0.0"
     meshcore_usb: MeshcoreUsbConfig = field(default_factory=MeshcoreUsbConfig)
+    rnode_usb: RnodeUsbConfig = field(default_factory=RnodeUsbConfig)
 
 
 @dataclass
