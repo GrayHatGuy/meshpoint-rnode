@@ -141,6 +141,32 @@ Open `http://<pi-ip>:8080` for the local dashboard.
 
 > **First time?** The [Onboarding Guide](docs/ONBOARDING.md) walks through everything from flashing the SD card to verifying your first captured packets.
 
+### RNode Options:
+
+Added [RNode sniffing to Meshpoint](https://github.com/GrayHatGuy/meshpoint) - disclaimer still in test mode and it does not send lxmf messages only captrures RX states from RNode [announces, msg, etc] - TX will be later...
+
+Basic gist:
+- Program RNodefirmware.ino etc
+- Set parameters for RNode conf
+- Set meshpoint config to mirror params
+```
+capture:
+  rnode_usb:
+    frequency_hz: 915000000   # adjust for your region/network
+    bandwidth_hz: 125000
+    spreading_factor: 7
+    coding_rate: 5
+```
+- socket usb
+- enable autodetec config
+```
+auto_detect: true 
+```
+- reboot
+```
+meshpoint reboot
+```
+
 ---
 
 ## Architecture
