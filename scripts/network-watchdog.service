@@ -1,5 +1,5 @@
 [Unit]
-Description=Mesh Point WiFi Network Watchdog
+Description=Meshpoint WiFi Network Watchdog
 After=network-online.target
 Wants=network-online.target
 

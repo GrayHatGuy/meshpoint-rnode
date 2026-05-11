@@ -1,4 +1,4 @@
-"""Mesh Point CLI -- argparse dispatcher for management subcommands."""
+"""Meshpoint CLI -- argparse dispatcher for management subcommands."""
 
 from __future__ import annotations
 
@@ -47,24 +47,30 @@ def cmd_stop(_args: argparse.Namespace) -> None:
     print("  Service stopped.")
 
 
+def cmd_report(_args: argparse.Namespace) -> None:
+    from src.cli.report_command import run_report
+    run_report()
+
+
 def cmd_meshcore_radio(args: argparse.Namespace) -> None:
     from src.cli.meshcore_radio_command import run_meshcore_radio
     run_meshcore_radio(args)
 
 
 def cmd_version(_args: argparse.Namespace) -> None:
-    print(f"  Mesh Point v{VERSION}")
+    print(f"  Meshpoint v{VERSION}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="meshpoint",
-        description="Mesh Radar -- Mesh Point management CLI",
+        description="Meshpoint management CLI",
     )
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("setup", help="Run the interactive setup wizard")
     sub.add_parser("status", help="Show device status and health")
+    sub.add_parser("report", help="Full operational report (requires running service)")
     sub.add_parser("logs", help="Tail the service logs (journalctl)")
     sub.add_parser("restart", help="Restart the meshpoint service")
     sub.add_parser("stop", help="Stop the meshpoint service")
@@ -89,6 +95,7 @@ def main() -> None:
     dispatch = {
         "setup": cmd_setup,
         "status": cmd_status,
+        "report": cmd_report,
         "logs": cmd_logs,
         "restart": cmd_restart,
         "stop": cmd_stop,

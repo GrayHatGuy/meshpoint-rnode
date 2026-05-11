@@ -1,49 +1,116 @@
 /**
- * Single-page controller for the local Mesh Point dashboard.
+ * Single-page controller for the local Meshpoint dashboard.
  * Wires up map, node list, packet feed, stat cards, and WebSocket.
  */
 document.addEventListener('DOMContentLoaded', async () => {
     const nodeMap = new NodeMap('map');
-    const nodeList = new SimpleNodeList('node-list');
     const packetFeed = new SimplePacketFeed('packet-tbody');
 
-    await _loadInitial(nodeMap, nodeList, packetFeed);
+    const nodeDrawer = new NodeDrawer('node-drawer', {
+        onSendMessage: (node) => _openMessagingForNode(node),
+        onViewOnMap: (node) => {
+            if (node.latitude && node.longitude) {
+                nodeMap.centerOn(node.latitude, node.longitude);
+            }
+        },
+    });
+
+    const nodeCards = new NodeCards('node-list', (node) => nodeDrawer.open(node));
+
+    const backdrop = document.getElementById('node-backdrop');
+    if (backdrop) {
+        backdrop.addEventListener('click', () => {
+            nodeDrawer.close();
+            backdrop.classList.remove('nd-backdrop--visible');
+        });
+    }
+
+    const origOpen = nodeDrawer.open.bind(nodeDrawer);
+    nodeDrawer.open = async (node) => {
+        if (backdrop) backdrop.classList.add('nd-backdrop--visible');
+        await origOpen(node);
+    };
+    const origClose = nodeDrawer.close.bind(nodeDrawer);
+    nodeDrawer.close = () => {
+        if (backdrop) backdrop.classList.remove('nd-backdrop--visible');
+        origClose();
+    };
+
+    packetFeed.setOnFocus(sourceId => {
+        if (sourceId) nodeMap.drawFocusLine(sourceId);
+        else nodeMap.clearFocusLine();
+    });
+
+    await _loadInitial(nodeMap, nodeCards, packetFeed);
     await _updateStats();
     _checkForUpdate();
 
     window.concentratorWS.on('packet', (packet) => {
         packetFeed.addPacket(packet);
         nodeMap.updateFromPacket(packet);
-        nodeList.updateFromPacket(packet);
+        nodeCards.updateFromPacket(packet);
         _incrementPacketCount();
     });
+
+    _setupTabs();
 
     window.concentratorWS.connect();
 
     setInterval(() => {
-        _refreshData(nodeMap, nodeList);
+        _refreshData(nodeMap, nodeCards, packetFeed);
         _updateStats();
     }, 15_000);
 
     setInterval(_checkForUpdate, 300_000);
 });
 
+function _openMessagingForNode(node) {
+    const msgTab = document.querySelector('[data-tab="messages"]');
+    if (msgTab) msgTab.click();
+
+    setTimeout(() => {
+        if (window.messagingPanel) {
+            window.messagingPanel.openConversation({
+                node_id: node.node_id,
+                node_name: node.display_name || node.long_name || node.node_id,
+                protocol: node.protocol || 'meshtastic',
+                is_broadcast: false,
+            });
+        }
+    }, 100);
+}
+
 async function _loadInitial(nodeMap, nodeList, packetFeed) {
     try {
         const [deviceRes, nodesRes, packetsRes] = await Promise.all([
             fetch('/api/device'),
-            fetch('/api/nodes'),
+            fetch('/api/nodes?enrich=true'),
             fetch('/api/packets?limit=50'),
         ]);
         const device = await deviceRes.json();
         const nodesData = await nodesRes.json();
         const packetsData = await packetsRes.json();
 
-        _setText('device-name', device.device_name || 'Mesh Point');
+        _setText('device-name', device.device_name || 'Meshpoint');
+        if (device.device_id) {
+            const short = device.device_id.slice(0, 8);
+            const idEl = document.getElementById('device-id');
+            if (idEl) {
+                idEl.textContent = short;
+                idEl.title = device.device_id;
+                idEl.addEventListener('click', () => {
+                    navigator.clipboard.writeText(device.device_id).then(() => {
+                        idEl.textContent = 'copied!';
+                        setTimeout(() => { idEl.textContent = short; }, 1500);
+                    });
+                });
+            }
+        }
 
         const nodes = nodesData.nodes || nodesData || [];
         nodeMap.loadNodes(nodes, device);
         nodeList.loadNodes(nodes);
+        packetFeed.loadNodes(nodes);
 
         const packets = packetsData.packets || packetsData || [];
         const sorted = packets.sort((a, b) => {
@@ -58,13 +125,14 @@ async function _loadInitial(nodeMap, nodeList, packetFeed) {
     }
 }
 
-async function _refreshData(nodeMap, nodeList) {
+async function _refreshData(nodeMap, nodeList, packetFeed) {
     try {
-        const res = await fetch('/api/nodes');
+        const res = await fetch('/api/nodes?enrich=true');
         const data = await res.json();
         const nodes = data.nodes || data || [];
         nodeMap.loadNodes(nodes);
         nodeList.loadNodes(nodes);
+        packetFeed.loadNodes(nodes);
     } catch (e) {
         console.error('Refresh failed:', e);
     }
@@ -145,6 +213,31 @@ async function _checkForUpdate() {
             badge.classList.add('hidden');
         }
     } catch (_) {}
+}
+
+function _setupTabs() {
+    document.querySelectorAll('.tab-bar__btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabId = btn.dataset.tab;
+            document.querySelectorAll('.tab-bar__btn').forEach(b => b.classList.remove('tab-bar__btn--active'));
+            btn.classList.add('tab-bar__btn--active');
+
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('tab-content--active'));
+            const target = document.getElementById(`tab-${tabId}`);
+            if (target) target.classList.add('tab-content--active');
+
+            if (tabId === 'messages' && window.messagingPanel) {
+                window.messagingPanel.onActivated();
+                window.messagingPanel.resetUnreadBadge();
+            }
+            if (tabId === 'radio' && window.radioSettings) {
+                window.radioSettings.onActivated();
+            }
+            if (tabId === 'stats' && window.statsTab) {
+                window.statsTab.refresh();
+            }
+        });
+    });
 }
 
 function _setText(id, value) {

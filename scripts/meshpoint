@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Mesh Point CLI entry point.
+# Meshpoint CLI entry point.
 # Installed to /usr/local/bin/meshpoint by install.sh.
 #
 # Activates the Python venv and dispatches to the CLI module.

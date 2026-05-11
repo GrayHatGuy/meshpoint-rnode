@@ -28,7 +28,7 @@ class DeviceIdentity:
     """This edge device's identity for upstream registration."""
 
     device_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    device_name: str = "Mesh Point"
+    device_name: str = "Meshpoint"
     auth_token: Optional[str] = None
 
     latitude: Optional[float] = None

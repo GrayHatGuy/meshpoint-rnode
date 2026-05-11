@@ -1,0 +1,73 @@
+/* Radio tab -- Channels table.
+ *
+ * Lives in its own file because the table is intentionally minimal
+ * and out of scope for the v0.7.1 redesign (the rest of the radio
+ * tab got the design treatment; the channels table stayed as-is per
+ * scope). Loaded by frontend/index.html alongside radio.css and
+ * radio_cards.css. */
+
+.ch-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+
+.ch-table th {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.45rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.ch-table td {
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid rgba(35, 48, 73, 0.5);
+    vertical-align: middle;
+}
+
+.ch-table__idx {
+    width: 30px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+}
+
+.ch-table__hash {
+    width: 70px;
+    color: var(--accent-cyan);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+}
+
+.ch-table__psk-cell { display: flex; align-items: center; gap: 0.3rem; }
+
+.ch-table__reveal {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0;
+    color: var(--text-muted);
+}
+
+.ch-table__name-input {
+    width: 100%;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.ch-table__name-input:hover { border-color: var(--border); }
+
+.ch-table__name-input:focus {
+    border-color: var(--accent-cyan);
+    background: rgba(10, 14, 23, 0.6);
+    box-shadow: var(--glow-cyan);
+}

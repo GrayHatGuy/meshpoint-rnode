@@ -4,7 +4,7 @@ Keys are issued by meshradar.io and have the format:
     mr1_<base64url(payload)>.<base64url(signature)>
 
 The embedded public key can verify that a key was signed by
-Mesh Radar's private key, but cannot be used to forge new keys.
+Meshradar's private key, but cannot be used to forge new keys.
 """
 
 from __future__ import annotations

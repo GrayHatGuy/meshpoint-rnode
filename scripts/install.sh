@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Mesh Radar -- Mesh Point Installer
+# Meshpoint Installer
 #
-# Prepares a fresh Raspberry Pi for Mesh Point operation:
+# Prepares a fresh Raspberry Pi for Meshpoint operation:
 #   1. System packages and build tools
 #   2. SPI / UART / GPS kernel config
 #   3. SX1302 HAL (libloragw) compilation
@@ -45,6 +45,22 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 info "Source directory: ${SCRIPT_DIR}"
 
+# Detect upgrade vs fresh install for the post-install banner.
+# An existing local.yaml or an enabled meshpoint service is the
+# clearest signal that the previous install completed at least once.
+IS_UPGRADE=0
+if [ -f "${MESHPOINT_DIR}/config/local.yaml" ] \
+        || systemctl is-enabled meshpoint &>/dev/null; then
+    IS_UPGRADE=1
+    info "Existing installation detected: running in upgrade mode"
+fi
+
+# Read the version we're installing for the post-install banner.
+INSTALL_VERSION="$(
+    grep -oP '__version__ = "\K[^"]+' "${SCRIPT_DIR}/src/version.py" \
+        2>/dev/null || echo "unknown"
+)"
+
 # ── 1. System packages ─────────────────────────────────────────────
 
 info "Updating system packages..."
@@ -84,7 +100,7 @@ if [ -f "$BOOT_CONFIG" ]; then
     if ! grep -q "dtoverlay=disable-bt" "$BOOT_CONFIG"; then
         info "Adding dtoverlay=disable-bt to ${BOOT_CONFIG}"
         echo "" >> "$BOOT_CONFIG"
-        echo "# Mesh Point: free primary UART for GPS" >> "$BOOT_CONFIG"
+        echo "# Meshpoint: free primary UART for GPS" >> "$BOOT_CONFIG"
         echo "dtoverlay=disable-bt" >> "$BOOT_CONFIG"
     else
         info "dtoverlay=disable-bt already present"
@@ -163,6 +179,9 @@ _B = """\
         sw_reg2 = 4;
     }
 
+    sx1302_tx_sw_peak1 = sw_reg1;
+    sx1302_tx_sw_peak2 = sw_reg2;
+
     err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF5_PEAK1_POS_SF5, sw_reg1);
     err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH1_SF5_PEAK2_POS_SF5, sw_reg2);
     err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF6_PEAK1_POS_SF6, sw_reg1);
@@ -180,9 +199,42 @@ if "sw_reg1" in s1:
     pass
 elif _A in s1:
     s1 = s1.replace(_A, _B, 1)
-    f1.write_text(s1, newline="\n")
 else:
     print("FAIL: source mismatch in " + str(f1)); sys.exit(1)
+
+_TX_A = """\
+    /* Syncword */
+    if ((lwan_public == false) || (pkt_data->datarate == DR_LORA_SF5) || (pkt_data->datarate == DR_LORA_SF6)) {
+        DEBUG_MSG("Setting LoRa syncword 0x12\\n");
+        err = lgw_reg_w(SX1302_REG_TX_TOP_FRAME_SYNCH_0_PEAK1_POS(pkt_data->rf_chain), 2);
+        CHECK_ERR(err);
+        err = lgw_reg_w(SX1302_REG_TX_TOP_FRAME_SYNCH_1_PEAK2_POS(pkt_data->rf_chain), 4);
+        CHECK_ERR(err);
+    } else {
+        DEBUG_MSG("Setting LoRa syncword 0x34\\n");
+        err = lgw_reg_w(SX1302_REG_TX_TOP_FRAME_SYNCH_0_PEAK1_POS(pkt_data->rf_chain), 6);
+        CHECK_ERR(err);
+        err = lgw_reg_w(SX1302_REG_TX_TOP_FRAME_SYNCH_1_PEAK2_POS(pkt_data->rf_chain), 8);
+        CHECK_ERR(err);
+    }"""
+
+_TX_B = """\
+    /* Syncword */
+    err = lgw_reg_w(SX1302_REG_TX_TOP_FRAME_SYNCH_0_PEAK1_POS(pkt_data->rf_chain), sx1302_tx_sw_peak1);
+    CHECK_ERR(err);
+    err = lgw_reg_w(SX1302_REG_TX_TOP_FRAME_SYNCH_1_PEAK2_POS(pkt_data->rf_chain), sx1302_tx_sw_peak2);
+    CHECK_ERR(err);"""
+
+if "static uint8_t sx1302_tx_sw_peak1" not in s1:
+    s1 = s1.replace("int sx1302_lora_syncword(", "static uint8_t sx1302_tx_sw_peak1 = 2;\nstatic uint8_t sx1302_tx_sw_peak2 = 4;\n\nint sx1302_lora_syncword(", 1)
+
+if "sx1302_tx_sw_peak1 = sw_reg1" not in s1:
+    s1 = s1.replace("    sw_reg2 = 4;\n    }\n\n    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF5_PEAK1_POS_SF5", "    sw_reg2 = 4;\n    }\n\n    sx1302_tx_sw_peak1 = sw_reg1;\n    sx1302_tx_sw_peak2 = sw_reg2;\n\n    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF5_PEAK1_POS_SF5", 1)
+
+if _TX_A in s1:
+    s1 = s1.replace(_TX_A, _TX_B, 1)
+
+f1.write_text(s1, newline="\n")
 
 _C = [
 ("""\
@@ -306,7 +358,15 @@ _HALCFG
     info "libloragw.so installed to /usr/local/lib/"
 fi
 
-# ── 5. Install Mesh Point application ──────────────────────────────
+# ── 4b. Apply TX sync word patch ─────────────────────────────────
+
+HAL_SRC="${HAL_BUILD_DIR}/libloragw/src/loragw_sx1302.c"
+if [ -f "$HAL_SRC" ]; then
+    info "Applying TX sync word patch..."
+    bash "${SCRIPT_DIR}/scripts/patch_hal.sh"
+fi
+
+# ── 5. Install Meshpoint application ──────────────────────────────
 
 info "Installing Meshpoint to ${MESHPOINT_DIR}..."
 mkdir -p "$MESHPOINT_DIR"
@@ -319,6 +379,18 @@ rsync -a --exclude='venv' \
          --exclude='data' \
          --exclude='*.pyc' \
          "${SCRIPT_DIR}/" "$MESHPOINT_DIR/"
+
+# ── 5b. Remove stale compiled core modules from prior installs ─────
+# Releases before 0.7.0 shipped .cpython-*.so files alongside the
+# .py source. Python prefers the .so at import time, so any leftover
+# binary would silently shadow the current source. rsync above does
+# not delete files that are absent from the source tree, so we
+# explicitly clean them up here.
+
+if find "${MESHPOINT_DIR}/src" -name '*.cpython-*.so' -print -quit | grep -q .; then
+    info "Removing stale compiled modules from previous installation..."
+    find "${MESHPOINT_DIR}/src" -name '*.cpython-*.so' -delete
+fi
 
 # ── 6. Python virtual environment ──────────────────────────────────
 
@@ -345,6 +417,24 @@ fi
 # Grant access to SPI, UART, GPIO, and I2C
 usermod -a -G spi,gpio,dialout,i2c meshpoint 2>/dev/null || true
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/data"
+chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/config"
+
+# Espressif USB serial devices (Heltec V3/V4, T-Beam ESP32-S3) may not
+# default to dialout group on all Pi OS versions. Add a udev rule so
+# the meshpoint service user can access them for relay and MeshCore.
+UDEV_RULE='SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0666"'
+UDEV_FILE="/etc/udev/rules.d/99-meshpoint-esp.rules"
+if [ ! -f "$UDEV_FILE" ]; then
+    info "Installing udev rule for Espressif USB serial devices..."
+    echo "$UDEV_RULE" > "$UDEV_FILE"
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger 2>/dev/null || true
+fi
+
+# Allow service user to restart/stop its own service (dashboard + remote commands)
+info "Installing sudoers rule for service management..."
+cp "${MESHPOINT_DIR}/config/sudoers-meshpoint" /etc/sudoers.d/meshpoint
+chmod 440 /etc/sudoers.d/meshpoint
 
 # ── 9. Configure journald log rotation ─────────────────────────────
 
@@ -380,26 +470,38 @@ ln -sf "${MESHPOINT_DIR}/${CLI_SCRIPT}" /usr/local/bin/meshpoint
 
 echo ""
 echo "==========================================="
-echo "  Mesh Point installation complete!"
-echo "==========================================="
-echo ""
-echo "  Next steps:"
-echo ""
-echo "  1. Reboot to apply SPI/UART changes:"
-echo "       sudo reboot"
-echo ""
-echo "  2. After reboot, run the setup wizard:"
-echo "       sudo meshpoint setup"
-echo ""
-echo "  3. The wizard will walk you through:"
-echo "       - Hardware detection"
-echo "       - API key configuration"
-echo "       - Device naming and GPS"
-echo "       - Starting the service"
-echo ""
-echo "  IMPORTANT: Never yank the power cable"
-echo "  without shutting down first. Always run:"
-echo "       sudo poweroff"
-echo "  and wait for the LED to go dark."
-echo ""
+if [ "$IS_UPGRADE" = "1" ]; then
+    echo "  Meshpoint upgrade to v${INSTALL_VERSION} complete!"
+    echo "==========================================="
+    echo ""
+    echo "  Restart the service to apply changes:"
+    echo "       sudo systemctl restart meshpoint"
+    echo ""
+    echo "  A reboot is NOT required: SPI/UART/I2C are"
+    echo "  already configured from the original install."
+    echo ""
+else
+    echo "  Meshpoint installation complete!"
+    echo "==========================================="
+    echo ""
+    echo "  Next steps:"
+    echo ""
+    echo "  1. Reboot to apply SPI/UART changes:"
+    echo "       sudo reboot"
+    echo ""
+    echo "  2. After reboot, run the setup wizard:"
+    echo "       sudo meshpoint setup"
+    echo ""
+    echo "  3. The wizard will walk you through:"
+    echo "       - Hardware detection"
+    echo "       - API key configuration"
+    echo "       - Device naming and GPS"
+    echo "       - Starting the service"
+    echo ""
+    echo "  IMPORTANT: Never yank the power cable"
+    echo "  without shutting down first. Always run:"
+    echo "       sudo poweroff"
+    echo "  and wait for the LED to go dark."
+    echo ""
+fi
 echo "==========================================="

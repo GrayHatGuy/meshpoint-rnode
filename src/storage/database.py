@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS packets (
     channel_hash     INTEGER DEFAULT 0,
     want_ack         INTEGER DEFAULT 0,
     via_mqtt         INTEGER DEFAULT 0,
+    relay_node       INTEGER DEFAULT 0,
     decoded_payload  TEXT,
     decrypted        INTEGER DEFAULT 0,
     rssi             REAL,
@@ -68,6 +69,26 @@ CREATE INDEX IF NOT EXISTS idx_packets_protocol ON packets(protocol);
 CREATE INDEX IF NOT EXISTS idx_packets_type ON packets(packet_type);
 CREATE INDEX IF NOT EXISTS idx_telemetry_node ON telemetry(node_id);
 CREATE INDEX IF NOT EXISTS idx_telemetry_timestamp ON telemetry(timestamp);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    direction     TEXT NOT NULL,
+    text          TEXT NOT NULL,
+    node_id       TEXT NOT NULL,
+    node_name     TEXT,
+    protocol      TEXT NOT NULL,
+    channel       INTEGER NOT NULL DEFAULT 0,
+    timestamp     TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'sent',
+    packet_id     TEXT,
+    rssi          REAL,
+    snr           REAL,
+    rx_count      INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_node ON messages(node_id);
+CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
+CREATE INDEX IF NOT EXISTS idx_messages_direction ON messages(direction);
 """
 
 
@@ -88,12 +109,63 @@ class DatabaseManager:
         logger.info("Database connected: %s", self._db_path)
 
     async def _run_migrations(self) -> None:
+        cursor = await self._connection.execute("PRAGMA table_info(packets)")
+        pkt_cols = {row[1] for row in await cursor.fetchall()}
+        if "relay_node" not in pkt_cols:
+            await self._connection.execute(
+                "ALTER TABLE packets ADD COLUMN relay_node INTEGER DEFAULT 0"
+            )
+            logger.info("Migration: added 'relay_node' column to packets table")
+
         cursor = await self._connection.execute("PRAGMA table_info(nodes)")
         columns = {row[1] for row in await cursor.fetchall()}
-
         if "role" not in columns:
             await self._connection.execute("ALTER TABLE nodes ADD COLUMN role TEXT")
             logger.info("Migration: added 'role' column to nodes table")
+
+        cursor = await self._connection.execute("PRAGMA table_info(messages)")
+        msg_cols = {row[1] for row in await cursor.fetchall()}
+        if msg_cols and "rssi" not in msg_cols:
+            await self._connection.execute("ALTER TABLE messages ADD COLUMN rssi REAL")
+            await self._connection.execute("ALTER TABLE messages ADD COLUMN snr REAL")
+            logger.info("Migration: added signal columns to messages table")
+        if msg_cols and "rx_count" not in msg_cols:
+            await self._connection.execute(
+                "ALTER TABLE messages ADD COLUMN rx_count INTEGER NOT NULL DEFAULT 1"
+            )
+            logger.info("Migration: added rx_count column to messages table")
+
+        await self._cleanup_cross_protocol_name_contamination()
+
+    async def _cleanup_cross_protocol_name_contamination(self) -> None:
+        """Repair Meshtastic node rows whose long_name was overwritten by a
+        MeshCore contact name due to the unscoped fallback in versions <0.6.7.
+
+        Idempotent: only matches rows where a Meshtastic long_name exactly
+        matches a long_name on a `mc:%` MeshCore row (the canonical source of
+        contamination). The Meshtastic row is reset to NULL so the next
+        NodeInfo broadcast from the real node repopulates it correctly.
+        """
+        cursor = await self._connection.execute(
+            """
+            UPDATE nodes
+            SET long_name = NULL
+            WHERE protocol = 'meshtastic'
+              AND long_name IS NOT NULL
+              AND long_name IN (
+                  SELECT long_name FROM nodes
+                  WHERE protocol = 'meshcore'
+                    AND node_id LIKE 'mc:%'
+                    AND long_name IS NOT NULL
+              )
+            """
+        )
+        if cursor.rowcount and cursor.rowcount > 0:
+            logger.warning(
+                "Migration: cleared %d cross-protocol contaminated Meshtastic "
+                "node row(s); long_name will be repopulated on next NodeInfo",
+                cursor.rowcount,
+            )
 
     async def disconnect(self) -> None:
         if self._connection:

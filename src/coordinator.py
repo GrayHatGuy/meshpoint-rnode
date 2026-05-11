@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
+from src.analytics.stats_reporter import StatsReporter
 from src.capture.capture_coordinator import CaptureCoordinator
 from src.config import AppConfig
 from src.decode.crypto_service import CryptoService
@@ -11,6 +12,7 @@ from src.decode.packet_router import PacketRouter
 from src.log_format import CYAN, DIM, GREEN, RESET
 from src.models.packet import Packet, Protocol, RawCapture
 from src.relay.meshtastic_transmitter import MeshtasticTransmitter
+from src.relay.mqtt_publisher import MqttPublisher
 from src.relay.relay_manager import RelayManager
 from src.storage.database import DatabaseManager
 from src.storage.node_repository import NodeRepository
@@ -47,11 +49,14 @@ class PipelineCoordinator:
             max_relay_rssi=relay_cfg.max_relay_rssi,
         )
         self._transmitter: Optional[MeshtasticTransmitter] = None
+        self._mqtt: Optional[MqttPublisher] = None
+        self._stats_reporter = StatsReporter()
 
         self._node_repo: Optional[NodeRepository] = None
         self._packet_repo: Optional[PacketRepository] = None
         self._telemetry_repo: Optional[TelemetryRepository] = None
 
+        self._last_node_update: dict[str, Any] = {}
         self._on_packet_callbacks: list[Callable[[Packet], None]] = []
         self._running = False
         self._pipeline_task: Optional[asyncio.Task] = None
@@ -87,6 +92,10 @@ class PipelineCoordinator:
     def relay_manager(self) -> RelayManager:
         return self._relay
 
+    @property
+    def stats_reporter(self) -> StatsReporter:
+        return self._stats_reporter
+
     def on_packet(self, callback: Callable[[Packet], None]) -> None:
         """Register a callback invoked for each decoded packet."""
         self._on_packet_callbacks.append(callback)
@@ -99,6 +108,7 @@ class PipelineCoordinator:
 
         self._setup_channel_keys()
         self._setup_relay_transmitter()
+        self._setup_mqtt()
         await self._capture.start()
 
         self._running = True
@@ -129,6 +139,8 @@ class PipelineCoordinator:
                     pass
         if self._transmitter:
             self._transmitter.disconnect()
+        if self._mqtt:
+            self._mqtt.disconnect()
         await self._db.disconnect()
         logger.info(
             f" {CYAN}--{RESET} {DIM}PIPELINE{RESET}  stopped"
@@ -179,6 +191,8 @@ class PipelineCoordinator:
         packet.capture_source = raw.capture_source
         await self._store_packet(packet)
         await self._relay.process_packet(packet)
+        self._publish_mqtt(packet)
+        self._record_stats(packet)
         self._notify_callbacks(packet)
 
     @staticmethod
@@ -210,6 +224,8 @@ class PipelineCoordinator:
 
         if node_update:
             await self._node_repo.upsert(node_update)
+            self._last_node_update[node_update.node_id] = node_update
+            self._stats_reporter.record_node(node_update.to_dict())
         elif packet.source_id and packet.source_id != "unknown":
             await self._node_repo.increment_packet_count(packet.source_id)
 
@@ -225,6 +241,38 @@ class PipelineCoordinator:
         if telemetry:
             await self._telemetry_repo.insert(telemetry)
 
+    def _record_stats(self, packet: Packet) -> None:
+        """Feed the StatsReporter with packet metrics for heartbeat reporting."""
+        rssi = packet.signal.rssi if packet.signal else None
+        snr = packet.signal.snr if packet.signal else None
+        self._stats_reporter.record_packet(
+            protocol=packet.protocol.value,
+            packet_type=packet.packet_type.value,
+            rssi=rssi,
+            snr=snr,
+            hop_start=packet.hop_start,
+            hop_limit=packet.hop_limit,
+        )
+
+        if (
+            packet.signal
+            and packet.source_id
+            and self._config.device.latitude is not None
+            and self._config.device.longitude is not None
+        ):
+            node = self._last_node_update.get(packet.source_id)
+            if node and node.has_position:
+                self._stats_reporter.record_farthest_direct(
+                    source_id=packet.source_id,
+                    rssi=rssi,
+                    device_lat=self._config.device.latitude,
+                    device_lon=self._config.device.longitude,
+                    node_lat=node.latitude,
+                    node_lon=node.longitude,
+                    hop_start=packet.hop_start,
+                    hop_limit=packet.hop_limit,
+                )
+
     def _notify_callbacks(self, packet: Packet) -> None:
         for callback in self._on_packet_callbacks:
             try:
@@ -239,6 +287,12 @@ class PipelineCoordinator:
             )
             return
 
+        logger.warning(
+            "Relay TX is EXPERIMENTAL and not production-ready. "
+            "Packets may not be re-transmitted correctly. "
+            "See ROADMAP.md for status."
+        )
+
         self._transmitter = MeshtasticTransmitter(self._config.relay)
         self._transmitter.connect()
         self._relay.set_transmit_function(self._transmitter.transmit)
@@ -247,6 +301,39 @@ class PipelineCoordinator:
             f"transmitter ready  "
             f"{DIM}max {self._config.relay.max_relay_per_minute}/min{RESET}"
         )
+
+    def _setup_mqtt(self) -> None:
+        if not self._config.mqtt.enabled:
+            logger.info(
+                f" {CYAN}--{RESET} {DIM}MQTT{RESET}     disabled"
+            )
+            return
+        try:
+            device_name = self._config.device.device_name
+            self._mqtt = MqttPublisher(
+                self._config.mqtt,
+                device_name,
+                channel_keys=self._config.meshtastic.channel_keys or None,
+            )
+            if self._mqtt.connect():
+                logger.info(
+                    f" {CYAN}--{RESET} {GREEN}MQTT{RESET}     "
+                    f"publisher started as {self._mqtt.gateway_id}"
+                )
+            else:
+                logger.warning("MQTT publisher failed to connect, continuing without MQTT")
+                self._mqtt = None
+        except Exception:
+            logger.exception("MQTT setup failed, continuing without MQTT")
+            self._mqtt = None
+
+    def _publish_mqtt(self, packet: Packet) -> None:
+        if not self._mqtt:
+            return
+        try:
+            self._mqtt.publish(packet)
+        except Exception:
+            logger.exception("MQTT publish error for packet %s", packet.packet_id)
 
     def _setup_channel_keys(self) -> None:
         for name, key in self._config.meshtastic.channel_keys.items():

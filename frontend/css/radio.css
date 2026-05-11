@@ -1,0 +1,436 @@
+/* Radio tab — base primitives.
+ *
+ * Tokens come from frontend/css/dashboard.css :root. Per-card
+ * component styles (status lamp, duty gauge, NodeInfo countdown,
+ * interval chips, etc.) live in radio_cards.css. Both files are
+ * loaded by frontend/index.html. */
+
+/* Page-level shell. The radio tab content is wrapped in
+ * <div class="r-stage"><div class="r-shell">...</div></div>. */
+
+.r-stage {
+    position: relative;
+    padding: 1.5rem;
+    max-width: 960px;
+    margin: 0 auto;
+}
+
+.r-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Console-style header banner (`admin@meshpoint:~$ radio status`). */
+
+.r-console {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.9rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+}
+
+.r-console__prompt { color: var(--accent-green); font-weight: 600; }
+.r-console__cursor { color: var(--text-muted); margin: 0 0.25rem 0 -0.1rem; }
+.r-console__cmd    { color: var(--text-secondary); }
+
+.r-console__right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.r-console__meta { margin-left: 0.3rem; }
+
+/* Heartbeat dot (live-connection indicator). */
+
+.r-heartbeat {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.r-heartbeat--ok {
+    background: var(--accent-green);
+    box-shadow: var(--glow-green);
+    animation: r-heartbeat 2s ease-in-out infinite;
+}
+
+.r-heartbeat--warn { background: var(--accent-amber); box-shadow: var(--glow-amber); }
+.r-heartbeat--err  { background: var(--accent-red);   box-shadow: var(--glow-red); }
+
+@keyframes r-heartbeat {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.55; transform: scale(0.85); }
+}
+
+/* Card scaffolding. Each radio surface (TX status, identity, config,
+ * NodeInfo, channels, companion) is an .r-card. */
+
+.r-card-row {
+    display: grid;
+    gap: 1rem;
+}
+
+.r-card-row--hero { grid-template-columns: 1fr 1fr; }
+
+.r-card {
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.2rem 1.1rem;
+    transition: border-color 0.2s;
+    display: flex;
+    flex-direction: column;
+}
+
+.r-card:hover { border-color: var(--border-glow); }
+
+.r-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-bottom: 0.7rem;
+    margin-bottom: 0.85rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.r-card__title {
+    font-family: var(--font-sans);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0;
+}
+
+.r-card__subtitle {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.r-card__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.7rem;
+}
+
+.r-card__label { font-size: 0.75rem; color: var(--text-muted); }
+
+.r-card__actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-top: 0.9rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--border);
+}
+
+/* Form field wrap (label + input). */
+
+.r-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 0.7rem;
+}
+
+.r-field__label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+/* Inputs and selects. */
+
+.r-input {
+    background: rgba(10, 14, 23, 0.7);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    padding: 0.4rem 0.6rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.r-input:focus {
+    border-color: var(--accent-cyan);
+    box-shadow: var(--glow-cyan);
+}
+
+.r-input--mono   { font-family: var(--font-mono); font-size: 0.8rem; }
+.r-input--narrow { max-width: 90px; }
+.r-input--short  { max-width: 90px; }
+
+.r-input-with-unit { display: inline-flex; align-items: stretch; gap: 0.4rem; }
+.r-input-with-unit .r-input { width: auto; }
+
+.r-input-with-unit__suffix {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+}
+
+.r-select {
+    background: rgba(10, 14, 23, 0.7);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    padding: 0.4rem 0.6rem;
+    width: 100%;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.r-select:focus { border-color: var(--accent-cyan); box-shadow: var(--glow-cyan); }
+
+/* Toggle switch. */
+
+.r-switch {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.r-switch input { opacity: 0; width: 0; height: 0; }
+
+.r-switch__track {
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 14, 23, 0.8);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.r-switch__track::before {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    left: 2px;
+    top: 2px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.r-switch input:checked + .r-switch__track {
+    background: rgba(6, 182, 212, 0.18);
+    border-color: var(--accent-cyan);
+}
+
+.r-switch input:checked + .r-switch__track::before {
+    transform: translateX(18px);
+    background: var(--accent-cyan);
+    box-shadow: var(--glow-cyan);
+}
+
+/* Buttons. */
+
+.r-btn {
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 0.45rem 1rem;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.r-btn--primary {
+    background: var(--accent-cyan);
+    color: #001019;
+    border-color: var(--accent-cyan);
+}
+
+.r-btn--primary:hover { box-shadow: var(--glow-cyan); }
+
+.r-btn--secondary {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-secondary);
+}
+
+.r-btn--secondary:hover {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    box-shadow: var(--glow-cyan);
+}
+
+.r-btn--warn {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: var(--accent-amber);
+}
+
+.r-btn--warn:hover { background: rgba(245, 158, 11, 0.25); }
+
+/* Pending-changes cue: a small pulsing cyan dot in the upper-right
+ * corner of any button when the user has unsaved input that this
+ * button would commit. Generic so other radio cards can adopt it
+ * by toggling the same class on their Save button. */
+
+.r-btn--has-pending {
+    position: relative;
+}
+
+.r-btn--has-pending::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--accent-amber);
+    border: 1.5px solid var(--bg-primary);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
+    animation: r-btn-pending-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes r-btn-pending-pulse {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 1; }
+}
+
+.r-btn[disabled],
+.r-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Badge and hint text. */
+
+.r-badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    background: rgba(6, 182, 212, 0.1);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    border-radius: var(--radius-sm);
+    color: var(--accent-cyan);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.r-badge--mono { font-family: var(--font-mono); font-size: 0.7rem; }
+
+.r-hint {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin: 0.6rem 0 0;
+    font-style: italic;
+}
+
+/* Footer keyboard hints. */
+
+.r-console-foot {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.6rem 0.9rem;
+    margin-top: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+.r-console-foot__hint { display: inline-flex; align-items: center; gap: 0.35rem; }
+.r-console-foot__sep  { color: var(--border); opacity: 0.7; }
+
+.r-console-foot kbd {
+    display: inline-block;
+    padding: 0.05rem 0.35rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Toast (floating snackbar). Owned by the radio orchestrator and
+ * appended to <body> so it overlays the dashboard regardless of which
+ * tab is active. Auto-hides after 2.5s. */
+
+.r-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    z-index: 9999;
+    padding: 0.65rem 1.1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--accent-cyan);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), var(--glow-cyan);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    max-width: 90vw;
+}
+
+.r-toast--visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+@media (max-width: 720px) {
+    .r-stage { padding: 0.75rem; }
+    .r-card-row--hero { grid-template-columns: 1fr; }
+    .r-card { padding: 0.85rem 0.95rem 1rem; }
+    .r-console {
+        flex-wrap: wrap;
+        row-gap: 0.3rem;
+        font-size: 0.72rem;
+        padding: 0.5rem 0.7rem;
+    }
+    .r-console__right {
+        margin-left: 0;
+        flex-basis: 100%;
+        justify-content: flex-end;
+    }
+    .r-card__header { flex-wrap: wrap; row-gap: 0.4rem; }
+    .r-card__actions { flex-wrap: wrap; }
+}

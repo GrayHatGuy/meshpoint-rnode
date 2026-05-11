@@ -10,6 +10,7 @@ from typing import Optional
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+from src.analytics.stats_reporter import StatsReporter
 from src.config import UpstreamConfig
 from src.log_format import CYAN, DIM, GREEN, RED, RESET, YELLOW
 from src.models.device_identity import DeviceIdentity
@@ -46,9 +47,11 @@ class UpstreamClient:
         self,
         config: UpstreamConfig,
         identity: DeviceIdentity,
+        stats_reporter: Optional[StatsReporter] = None,
     ):
         self._config = config
         self._identity = identity
+        self._stats_reporter = stats_reporter
         self._connection: Optional[websockets.WebSocketClientProtocol] = None
         self._buffer: deque[dict] = deque(maxlen=config.buffer_max_size)
         self._running = False
@@ -201,18 +204,45 @@ class UpstreamClient:
         while self._running and self._connected:
             await asyncio.sleep(self.HEARTBEAT_INTERVAL_SECONDS)
             try:
-                heartbeat = {
-                    "type": "heartbeat",
-                    "device_id": self._identity.device_id,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
+                heartbeat = self._build_heartbeat()
                 await self._send(heartbeat)
-                logger.debug("Heartbeat sent")
+                if self._stats_reporter:
+                    stats = heartbeat.get("stats", {})
+                    node_count = len(heartbeat.get("nodes", []))
+                    logger.info(
+                        "Heartbeat sent (enriched): pkts=%s nodes=%d ppm=%s",
+                        stats.get("total_packets", 0),
+                        node_count,
+                        stats.get("packets_per_minute", "--"),
+                    )
+                    self._stats_reporter.reset()
+                else:
+                    logger.info("Heartbeat sent")
             except ConnectionClosed:
                 break
             except Exception:
                 logger.warning("Failed to send heartbeat", exc_info=True)
                 break
+
+    def _build_heartbeat(self) -> dict:
+        """Build the heartbeat payload, enriched with stats when available."""
+        heartbeat: dict = {
+            "type": "heartbeat",
+            "device_id": self._identity.device_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if self._stats_reporter is None:
+            return heartbeat
+
+        report = self._stats_reporter.build_report()
+        nodes = self._stats_reporter.build_node_roster()
+
+        heartbeat["stats"] = report
+        heartbeat["packets_since_last"] = report.get("total_packets", 0)
+        if nodes:
+            heartbeat["nodes"] = nodes
+
+        return heartbeat
 
     def _build_registration(self) -> dict:
         return {

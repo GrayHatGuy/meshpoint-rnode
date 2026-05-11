@@ -1,0 +1,475 @@
+/* Radio tab — per-card components.
+ *
+ * Base primitives live in radio.css. This file holds the visual
+ * vocabulary specific to individual radio cards (status lamps,
+ * duty gauge, NodeInfo countdown, interval chips, channels table,
+ * MeshCore companion grid, restart bar). */
+
+/* Status lamp (industrial gauge feel). Used across the radio tab
+ * to communicate component state at a glance. Colors and animation
+ * are driven by the modifier class (--ready / --warn / --off). */
+
+.status-lamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.25rem 0.55rem 0.25rem 0.5rem;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.status-lamp__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.status-lamp__label { color: var(--text-secondary); }
+
+.status-lamp--ready {
+    border-color: rgba(0, 229, 160, 0.35);
+    background: rgba(0, 229, 160, 0.08);
+}
+.status-lamp--ready .status-lamp__dot {
+    background: var(--accent-green);
+    box-shadow: var(--glow-green);
+    animation: r-heartbeat 2s ease-in-out infinite;
+}
+.status-lamp--ready .status-lamp__label { color: var(--accent-green); }
+
+.status-lamp--warn {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.08);
+}
+.status-lamp--warn .status-lamp__dot {
+    background: var(--accent-amber);
+    box-shadow: var(--glow-amber);
+}
+.status-lamp--warn .status-lamp__label { color: var(--accent-amber); }
+
+.status-lamp--off {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.08);
+}
+.status-lamp--off .status-lamp__dot {
+    background: var(--accent-red);
+    box-shadow: var(--glow-red);
+}
+.status-lamp--off .status-lamp__label { color: var(--accent-red); }
+
+/* Industrial duty gauge (TX status card). The gauge itself is an
+ * SVG drawn by radio_status_card.js; these rules style the wrapping
+ * container, the readout overlay, and the per-band colors. */
+
+.duty-gauge {
+    position: relative;
+    width: 100%;
+    margin: 0.4rem 0 0.2rem;
+    aspect-ratio: 200 / 130;
+    max-width: 280px;
+    align-self: center;
+}
+
+.duty-gauge__svg { width: 100%; height: 100%; display: block; }
+
+.duty-gauge__arc-bg { stroke: rgba(35, 48, 73, 0.85); }
+
+.duty-gauge__arc-fill {
+    stroke: var(--accent-cyan);
+    filter: drop-shadow(0 0 4px rgba(6, 182, 212, 0.5));
+    transition: stroke 0.3s, d 0.4s ease-out;
+}
+
+.duty-gauge__arc-fill--mid {
+    stroke: var(--accent-amber);
+    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.5));
+}
+
+.duty-gauge__arc-fill--high {
+    stroke: var(--accent-red);
+    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.5));
+}
+
+.duty-gauge__ticks line {
+    stroke: var(--text-muted);
+    stroke-width: 1;
+    opacity: 0.6;
+}
+
+.duty-gauge__ticks line.tick--major {
+    stroke: var(--text-secondary);
+    stroke-width: 1.5;
+    opacity: 0.85;
+}
+
+.duty-gauge__readout {
+    position: absolute;
+    bottom: 8%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none;
+}
+
+.duty-gauge__value {
+    font-family: var(--font-mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.duty-gauge__value span {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-left: 0.1rem;
+}
+
+.duty-gauge__cap {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* Identity card (long name, short name, node ID). */
+
+.r-ident { display: flex; flex-direction: column; gap: 0.65rem; }
+
+.r-ident__row { display: flex; align-items: center; gap: 0.6rem; }
+
+.r-ident__label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    min-width: 96px;
+    flex-shrink: 0;
+}
+
+.r-ident__hint {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin: -0.3rem 0 0.2rem 96px;
+    line-height: 1.4;
+}
+
+/* Radio Configuration card stack: PRESET above TUNING, with
+ * a horizontal readout strip below for computed values. */
+
+.config-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+}
+
+.config-pane { display: flex; flex-direction: column; }
+
+.config-pane__label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 0.7rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px dashed rgba(6, 182, 212, 0.25);
+}
+
+.config-pane__inputs {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.config-pane__inputs .r-field {
+    flex: 1 1 180px;
+    margin-bottom: 0;
+    min-width: 0;
+}
+
+.config-pane__inputs .r-field--slot {
+    flex: 0 0 auto;
+}
+
+.config-pane__hint {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin: 0.7rem 0 0;
+    line-height: 1.4;
+    font-style: italic;
+}
+
+/* Read-only telemetry strip (computed values, horizontal). */
+
+.readout-strip {
+    display: flex;
+    align-items: stretch;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    padding-top: 0.85rem;
+    border-top: 1px dashed rgba(35, 48, 73, 0.6);
+}
+
+.readout-strip__label {
+    display: flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding-right: 0.3rem;
+    flex-shrink: 0;
+}
+
+.readout-strip .r-readout {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.r-readout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.45rem 0.6rem;
+    background: rgba(10, 14, 23, 0.55);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.r-readout__label {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.r-readout__value {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* NodeInfo Broadcast countdown hero. */
+
+.r-countdown {
+    text-align: center;
+    padding: 1rem 0 1.1rem;
+    margin: -0.2rem 0 0.7rem;
+    background: radial-gradient(ellipse at center, rgba(6, 182, 212, 0.06), transparent 70%);
+    border-radius: var(--radius);
+}
+
+.r-countdown__label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+.r-countdown__value {
+    font-family: var(--font-mono);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 12px rgba(6, 182, 212, 0.35);
+    margin: 0.35rem 0 0.5rem;
+    letter-spacing: 0.02em;
+}
+
+.r-countdown__sub {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.r-countdown__sub-item span { color: var(--text-secondary); }
+.r-countdown__sub-sep { opacity: 0.4; }
+
+/* Interval chips (NodeInfo broadcast presets). The "Off" chip is a
+ * visually distinct dashed pill so users see it as the pause
+ * affordance rather than another preset. */
+
+.interval-chips__row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+}
+
+.interval-chips__chips {
+    display: inline-flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+}
+
+.r-chip {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.25rem 0.65rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.r-chip:hover {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+}
+
+.r-chip--active {
+    border-color: var(--accent-cyan);
+    background: rgba(6, 182, 212, 0.12);
+    color: var(--accent-cyan);
+    box-shadow: var(--glow-cyan);
+}
+
+.r-chip--off {
+    color: var(--text-muted);
+    margin-right: 0.45rem;
+    border-style: dashed;
+}
+
+.r-chip--off:hover {
+    border-color: var(--accent-red);
+    color: var(--accent-red);
+    border-style: solid;
+}
+
+.r-chip--off.r-chip--active {
+    border-color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--accent-red);
+    box-shadow: var(--glow-red);
+    border-style: solid;
+}
+
+/* Channels table styles live in radio_channels.css to keep this
+ * file under the 500-line cap and to keep the visually-untouched
+ * v0.7.1 channels table colocated with its JS module. */
+
+/* MeshCore companion card. Three readouts in a row when populated;
+ * collapses to a single connect prompt when no companion is plugged
+ * in. */
+
+.companion-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+
+.companion-empty {
+    padding: 1rem 0;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-style: italic;
+}
+
+/* Sticky restart bar shown when any field requires a service
+ * restart to take effect. Pinned to the top of the radio scroll
+ * area (the .tab-content scroll container) so it stays visible
+ * as the user scrolls between cards. */
+
+.restart-bar {
+    display: none;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.65rem 1rem;
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    border-radius: var(--radius);
+    font-size: 0.78rem;
+    color: var(--accent-amber);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    animation: restart-bar-in 0.22s ease-out;
+}
+
+.restart-bar--visible { display: flex; }
+
+@keyframes restart-bar-in {
+    from { transform: translateY(-6px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+.restart-bar__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.restart-bar__msg { flex: 1; }
+
+@media (max-width: 720px) {
+    .companion-grid { grid-template-columns: 1fr 1fr; }
+    .duty-gauge { max-width: 240px; }
+    .r-countdown__value { font-size: 1.65rem; }
+    .readout-strip { flex-wrap: wrap; }
+    .readout-strip__label {
+        flex-basis: 100%;
+        padding-right: 0;
+    }
+    .readout-strip .r-readout {
+        flex: 1 1 calc(50% - 0.25rem);
+    }
+    .r-ident__row { flex-wrap: wrap; row-gap: 0.3rem; }
+    .r-ident__label {
+        min-width: 70px;
+        font-size: 0.6rem;
+    }
+    .r-ident__hint {
+        margin-left: 0;
+        margin-top: 0.1rem;
+        font-size: 0.65rem;
+    }
+    .config-pane__inputs { gap: 0.7rem; }
+}
+
+@media (max-width: 480px) {
+    .companion-grid { grid-template-columns: 1fr; }
+    .duty-gauge { max-width: 200px; }
+    .r-ident__row { flex-direction: column; align-items: stretch; gap: 0.25rem; }
+    .r-ident__label { min-width: 0; }
+}

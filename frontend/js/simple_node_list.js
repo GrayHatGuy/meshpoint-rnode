@@ -1,5 +1,5 @@
 /**
- * Simple node list for the local Mesh Point dashboard.
+ * Simple node list for the local Meshpoint dashboard.
  * Shows nodes with name, protocol badge, RSSI, and time ago.
  */
 class SimpleNodeList {

@@ -1,4 +1,4 @@
-"""Auto-detect Mesh Point hardware on a Raspberry Pi.
+"""Auto-detect Meshpoint hardware on a Raspberry Pi.
 
 Probes for SPI concentrator devices, I2C carrier board signatures,
 serial Meshtastic radios, and GPS UART to help the setup wizard

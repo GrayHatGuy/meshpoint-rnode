@@ -32,6 +32,13 @@ REGION_PRESETS: dict[str, RadioPreset] = {
 
 _REBOOT_WAIT_SECONDS = 4
 
+# Handshake timeout for the meshcore lib's send_appstart(). The lib's
+# default of 5s is too tight for ESP32-S3 boards (Heltec V3, etc.) which
+# routinely need 6-10s to respond after a USB enumeration or radio-config
+# reboot. 12s gives the chip room without making the user wait forever
+# when the device truly isn't there.
+_HANDSHAKE_TIMEOUT_SECONDS = 12.0
+
 
 @dataclass
 class RadioStatus:
@@ -55,7 +62,18 @@ async def _query_async(port: str, baud: int) -> Optional[RadioStatus]:
     try:
         from meshcore import MeshCore
 
-        mc = await MeshCore.create_serial(port, baud)
+        mc = await MeshCore.create_serial(
+            port, baud, default_timeout=_HANDSHAKE_TIMEOUT_SECONDS
+        )
+        if mc is None:
+            logger.warning(
+                "MeshCore handshake failed on %s. The companion did not "
+                "respond: another process may hold the port, or the device "
+                "is not running Companion USB firmware.",
+                port,
+            )
+            return None
+
         info = mc.self_info or {}
 
         device_info = await mc.commands.send_device_query()
@@ -94,7 +112,17 @@ async def _configure_async(
     try:
         from meshcore import MeshCore, EventType
 
-        mc = await MeshCore.create_serial(port, baud)
+        mc = await MeshCore.create_serial(
+            port, baud, default_timeout=_HANDSHAKE_TIMEOUT_SECONDS
+        )
+        if mc is None:
+            logger.warning(
+                "MeshCore handshake failed on %s during configure. "
+                "The companion did not respond.",
+                port,
+            )
+            return False
+
         result = await mc.commands.set_radio(freq, bw, sf, cr)
 
         if hasattr(result, "type") and result.type == EventType.ERROR:

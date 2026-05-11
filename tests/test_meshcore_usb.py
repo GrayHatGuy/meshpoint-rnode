@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import unittest
 from datetime import datetime, timezone
@@ -50,10 +51,44 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
         pkt = adapt_event(raw)
         self.assertIsNotNone(pkt)
         self.assertEqual(pkt.packet_type, PacketType.TEXT)
-        self.assertEqual(pkt.destination_id, "channel:2")
+        self.assertEqual(pkt.destination_id, "broadcast")
         self.assertEqual(pkt.channel_hash, 2)
         self.assertEqual(pkt.decoded_payload["channel"], 2)
         self.assertEqual(pkt.signal.snr, 11.25)
+
+    def test_channel_message_parses_sender_from_text(self):
+        raw = self._make_envelope("channel_message", {
+            "text": "Alice: Hello everyone",
+            "channel_idx": 0,
+            "timestamp": 1700000000,
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.decoded_payload["text"], "Hello everyone")
+        self.assertEqual(pkt.decoded_payload["long_name"], "Alice")
+        self.assertEqual(pkt.source_id, "mc:Alice")
+        self.assertEqual(pkt.destination_id, "broadcast")
+
+    def test_channel_message_with_sender_name_field(self):
+        raw = self._make_envelope("channel_message", {
+            "sender_name": "Bob",
+            "text": "Some message",
+            "channel_idx": 1,
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.decoded_payload["long_name"], "Bob")
+        self.assertEqual(pkt.source_id, "mc:Bob")
+
+    def test_contact_message_has_long_name(self):
+        raw = self._make_envelope("contact_message", {
+            "pubkey_prefix": "aabb1122",
+            "contact_name": "Charlie",
+            "text": "DM text",
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.decoded_payload["long_name"], "Charlie")
 
     def test_advertisement(self):
         raw = self._make_envelope("advertisement", {
@@ -208,6 +243,136 @@ class TestFindSerialCandidates(unittest.TestCase):
         )
         for port in result:
             self.assertNotEqual(port, "/dev/ttyUSB0")
+
+
+class TestMeshcoreUsbStartupRetry(unittest.IsolatedAsyncioTestCase):
+    """Verify the source schedules a background reconnect on initial fail."""
+
+    async def test_failed_initial_connect_schedules_reconnect_task(self):
+        """If _connect() leaves _connected False, a reconnect task spawns."""
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+
+        source = MeshcoreUsbCaptureSource(
+            serial_port="/dev/ttyFAKE", auto_detect=False
+        )
+
+        async def fake_resolve_port():
+            return "/dev/ttyFAKE"
+
+        async def fake_connect(port):
+            source._connected = False
+
+        # Replace _reconnect with a no-op that yields once so the task
+        # exists long enough to be observed, then exits cleanly.
+        async def fake_reconnect():
+            await asyncio.sleep(0)
+
+        source._resolve_port = fake_resolve_port  # type: ignore[assignment]
+        source._connect = fake_connect  # type: ignore[assignment]
+        source._reconnect = fake_reconnect  # type: ignore[assignment]
+
+        await source.start()
+        try:
+            self.assertIsNotNone(source._reconnect_task)
+            self.assertFalse(source._connected)
+            self.assertIsNone(source._health_task)
+        finally:
+            await source.stop()
+
+    async def test_successful_initial_connect_skips_reconnect_task(self):
+        """If _connect() succeeds, no reconnect task is scheduled."""
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+
+        source = MeshcoreUsbCaptureSource(
+            serial_port="/dev/ttyFAKE", auto_detect=False
+        )
+
+        async def fake_resolve_port():
+            return "/dev/ttyFAKE"
+
+        async def fake_connect(port):
+            source._connected = True
+
+        async def fake_health_loop():
+            await asyncio.sleep(60)
+
+        source._resolve_port = fake_resolve_port  # type: ignore[assignment]
+        source._connect = fake_connect  # type: ignore[assignment]
+        source._health_check_loop = fake_health_loop  # type: ignore[assignment]
+
+        await source.start()
+        try:
+            self.assertIsNone(source._reconnect_task)
+            self.assertTrue(source._connected)
+            self.assertIsNotNone(source._health_task)
+        finally:
+            await source.stop()
+
+    async def test_recent_event_skips_health_probe(self):
+        """If an event arrived recently, _has_recent_event_activity returns True."""
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+
+        source = MeshcoreUsbCaptureSource(
+            serial_port="/dev/ttyFAKE", auto_detect=False
+        )
+
+        # No events ever -> not recent
+        self.assertFalse(source._has_recent_event_activity())
+
+        # Mark as just-now
+        source._last_event_at = asyncio.get_event_loop().time()
+        self.assertTrue(source._has_recent_event_activity())
+
+        # Mark as ancient (10 minutes ago)
+        source._last_event_at = (
+            asyncio.get_event_loop().time() - 600.0
+        )
+        self.assertFalse(source._has_recent_event_activity())
+
+    async def test_on_event_records_timestamp(self):
+        """_on_event must update _last_event_at as proof of life."""
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+
+        source = MeshcoreUsbCaptureSource(
+            serial_port="/dev/ttyFAKE", auto_detect=False
+        )
+        source._running = True
+        self.assertEqual(source._last_event_at, 0.0)
+
+        class _FakeEvent:
+            pass
+
+        await source._on_event(_FakeEvent())
+        self.assertGreater(source._last_event_at, 0.0)
+
+    async def test_stop_cancels_pending_reconnect_task(self):
+        """stop() must cancel a still-running reconnect task without hanging."""
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+
+        source = MeshcoreUsbCaptureSource(
+            serial_port="/dev/ttyFAKE", auto_detect=False
+        )
+
+        async def fake_resolve_port():
+            return "/dev/ttyFAKE"
+
+        async def fake_connect(port):
+            source._connected = False
+
+        reconnect_started = asyncio.Event()
+
+        async def slow_reconnect():
+            reconnect_started.set()
+            await asyncio.sleep(60)
+
+        source._resolve_port = fake_resolve_port  # type: ignore[assignment]
+        source._connect = fake_connect  # type: ignore[assignment]
+        source._reconnect = slow_reconnect  # type: ignore[assignment]
+
+        await source.start()
+        await reconnect_started.wait()
+        await asyncio.wait_for(source.stop(), timeout=2.0)
+        self.assertIsNone(source._reconnect_task)
 
 
 if __name__ == "__main__":

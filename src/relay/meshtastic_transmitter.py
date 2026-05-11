@@ -42,6 +42,7 @@ class MeshtasticTransmitter:
         self._baud = config.serial_baud
         self._interface = None
         self._connected = False
+        self._payload_warning_logged = False
 
     @property
     def is_connected(self) -> bool:
@@ -112,7 +113,18 @@ class MeshtasticTransmitter:
 
         payload = self._get_payload(packet)
         if payload is None:
-            logger.warning("Relay TX: no payload available for packet %s", packet.packet_id)
+            if not self._payload_warning_logged:
+                logger.warning(
+                    "Relay TX: no payload available for packet %s "
+                    "(further skips logged at DEBUG until restart)",
+                    packet.packet_id,
+                )
+                self._payload_warning_logged = True
+            else:
+                logger.debug(
+                    "Relay TX: no payload available for packet %s",
+                    packet.packet_id,
+                )
             return
 
         self._interface.sendData(

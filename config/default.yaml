@@ -1,15 +1,20 @@
 radio:
   region: "US"
-  frequency_mhz: 906.875
+  # Frequency: set frequency_mhz (explicit MHz) OR slot (Meshtastic 1-indexed
+  # slot number). frequency_mhz wins if both are present. If neither is set,
+  # the regional default is used. Examples:
+  #   frequency_mhz: 906.875
+  #   slot: 20
   spreading_factor: 11
   bandwidth_khz: 250.0
-  coding_rate: "4/8"
+  coding_rate: "4/5"
   sync_word: 0x2B
   preamble_length: 16
   tx_power_dbm: 22
 
 meshtastic:
   default_key_b64: "AQ=="
+  primary_channel_name: "LongFast"
   # channel_keys:
   #   MyChannel: "base64encodedPSK=="
   #   SecretChat: "anotherBase64PSK=="
@@ -49,12 +54,12 @@ dashboard:
   static_dir: "frontend"
 
 device:
-  device_name: "Mesh Point"
+  device_name: "Meshpoint"
   latitude: 0.0
   longitude: 0.0
   altitude: 25
   hardware_description: "RAK2287 + Raspberry Pi 4"
-  firmware_version: "0.5.4"
+  firmware_version: "0.7.2"
 
 relay:
   enabled: false
@@ -72,12 +77,31 @@ upstream:
   buffer_max_size: 5000
   auth_token: null
 
+transmit:
+  enabled: false
+  node_id: null             # auto-generated 4-byte Meshtastic node ID
+  tx_power_dbm: 14          # conservative default (dBm)
+  # max_duty_cycle_percent omitted: auto-derives from radio.region
+  # (10% US/ANZ/KR/SG_923, 1% EU_868/IN). Override here to pin.
+  long_name: "Meshpoint"
+  short_name: "MPNT"
+  hop_limit: 3
+  nodeinfo:
+    interval_minutes: 180      # 5..1440 min, default 180 (3 hr); 0 = disabled
+    startup_delay_seconds: 60  # delay before first broadcast on boot
+
 mqtt:
   enabled: false
   broker: "mqtt.meshtastic.org"
   port: 1883
   username: "meshdev"
   password: "large4cats"
+  # Topic format is "<topic_root>/<region>/2/e/<channel>/<gateway_id>".
+  # `topic_root` and `region` are concatenated with a slash, so leave
+  # `topic_root` as "msh" and use `region` for the regional segment
+  # (the Meshtastic spec). Setting topic_root to "msh/US/FL" while
+  # leaving region="US" doubles the region: msh/US/FL/US/2/e/...
+  # `mqtt.region` is independent of `radio.region`: defaults to "US".
   topic_root: "msh"
   region: "US"
   publish_channels:

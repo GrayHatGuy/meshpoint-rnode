@@ -89,7 +89,11 @@ class NodeRepository:
                    p.hop_limit AS latest_hop_limit,
                    p.hop_start AS latest_hop_start,
                    t.battery_level AS latest_battery,
-                   t.voltage AS latest_voltage
+                   t.voltage AS latest_voltage,
+                   t.temperature AS latest_temperature,
+                   t.humidity AS latest_humidity,
+                   t.channel_utilization AS latest_channel_util,
+                   t.air_util_tx AS latest_air_util
             FROM nodes n
             LEFT JOIN (
                 SELECT source_id,
@@ -99,7 +103,8 @@ class NodeRepository:
             ) p ON p.source_id = n.node_id AND p.rn = 1
             LEFT JOIN (
                 SELECT node_id,
-                       battery_level, voltage,
+                       battery_level, voltage, temperature, humidity,
+                       channel_utilization, air_util_tx,
                        ROW_NUMBER() OVER (PARTITION BY node_id ORDER BY timestamp DESC) AS rn
                 FROM telemetry
             ) t ON t.node_id = n.node_id AND t.rn = 1
@@ -108,19 +113,25 @@ class NodeRepository:
             """,
             (limit,),
         )
-        results = []
-        for row in rows:
-            node = self._row_to_node(row)
-            node_dict = node.to_dict()
-            node_dict["latest_rssi"] = row.get("latest_rssi")
-            node_dict["latest_snr"] = row.get("latest_snr")
-            node_dict["latest_battery"] = row.get("latest_battery")
-            node_dict["latest_voltage"] = row.get("latest_voltage")
-            hop_start = row.get("latest_hop_start", 0) or 0
-            hop_limit = row.get("latest_hop_limit", 0) or 0
-            node_dict["latest_hops"] = max(0, hop_start - hop_limit)
-            results.append(node_dict)
-        return results
+        return [self._enrich_row(row) for row in rows]
+
+    @staticmethod
+    def _enrich_row(row: dict) -> dict:
+        """Build an enriched node dict from a joined query row."""
+        node = NodeRepository._row_to_node(row)
+        d = node.to_dict()
+        d["latest_rssi"] = row.get("latest_rssi")
+        d["latest_snr"] = row.get("latest_snr")
+        d["latest_battery"] = row.get("latest_battery")
+        d["latest_voltage"] = row.get("latest_voltage")
+        d["latest_temperature"] = row.get("latest_temperature")
+        d["latest_humidity"] = row.get("latest_humidity")
+        d["latest_channel_util"] = row.get("latest_channel_util")
+        d["latest_air_util"] = row.get("latest_air_util")
+        hop_start = row.get("latest_hop_start", 0) or 0
+        hop_limit = row.get("latest_hop_limit", 0) or 0
+        d["latest_hops"] = max(0, hop_start - hop_limit)
+        return d
 
     async def increment_packet_count(self, node_id: str) -> None:
         await self._db.execute(

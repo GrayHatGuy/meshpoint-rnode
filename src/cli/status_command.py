@@ -1,4 +1,4 @@
-"""Query the running Mesh Point service and display health info."""
+"""Query the running Meshpoint service and display health info."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ LOCAL_CONFIG = Path("config/local.yaml")
 
 
 def show_status() -> None:
-    """Print a consolidated status report for the Mesh Point."""
+    """Print a consolidated status report for the Meshpoint."""
     print()
-    print("  Mesh Point Status")
+    print("  Meshpoint Status")
     print("  " + "=" * 40)
 
     _show_service_state()

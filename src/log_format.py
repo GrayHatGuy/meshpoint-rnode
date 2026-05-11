@@ -1,4 +1,4 @@
-"""Colored terminal logging for Mesh Point.
+"""Colored terminal logging for Meshpoint.
 
 Provides a rich log formatter with ANSI colors, an ASCII art startup
 banner, and a compact packet display with RSSI signal bars.

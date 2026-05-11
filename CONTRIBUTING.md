@@ -116,6 +116,7 @@ Rules:
 
 ## Style
 
+- PRs that touch `frontend/` MUST conform to [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md). Read it before opening the PR.
 - Keep changes small
 - Avoid unrelated cleanup
 - Prefer readability

@@ -4,59 +4,73 @@
 
 <h1 align="center">Meshpoint</h1>
 
-<p align="center"><strong>Open-source LoRa packet intelligence for Meshtastic and MeshCore mesh networks.</strong><br>Supports US915, EU868, ANZ915, IN865, KR920, and SG923 frequency regions.</p>
+<p align="center"><strong>Open-source Meshtastic base station with native TX/RX, 8-channel concentrator, and browser-based messaging.</strong><br>Runs on Raspberry Pi 4 + SX1302/SX1303. Supports US915, EU868, ANZ915, IN865, KR920, and SG923.</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-green.svg)](https://www.python.org/)
 [![Platform: Raspberry Pi](https://img.shields.io/badge/platform-Raspberry%20Pi%204-red.svg)](https://www.raspberrypi.com/)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/Cfuc6Cp4wM)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/BnhSeFXVY8)
 [![GitHub stars](https://img.shields.io/github/stars/KMX415/meshpoint?style=flat&color=yellow)](https://github.com/KMX415/meshpoint/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/issues)
 [![Last commit](https://img.shields.io/github/last-commit/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/commits/main)
-[![Version](https://img.shields.io/badge/version-0.5.4-orange.svg)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.2-orange.svg)](docs/CHANGELOG.md)
 
-![Meshradar Dashboard](dashboard.png)
+### Meshradar Cloud Dashboard
+![Meshradar Cloud Dashboard](Meshradar414.png)
 
-![Meshpoint Terminal](docs/meshpoint-terminal-banner.png)
+### Local Dashboard
+![Local Dashboard](Meshpoint414.png)
+
+### Messaging
+![Messaging](MessagingUI.png)
+
+### Startup Log
+![Startup Log](MP%20Log.png)
 
 ---
 
 ## What Is This?
 
-A Raspberry Pi-based LoRa listener that captures traffic from **Meshtastic** and **MeshCore** mesh networks simultaneously. The SX1302/SX1303 concentrator listens on **8 LoRa channels** across all spreading factors at once, while an optional MeshCore USB companion monitors MeshCore traffic on its own frequency.
+A Raspberry Pi-based Meshtastic base station that sends and receives messages through an SX1302/SX1303 concentrator. The concentrator receives on 8 channels simultaneously (SF7-SF12) and transmits natively with up to 27 dBm output. Phones and nodes see it as a regular participant on the mesh.
 
-Packets are captured, decrypted, stored locally, and shown on a real-time dashboard. Optionally, everything syncs upstream to [Meshradar](https://meshradar.io) for aggregated city-wide mesh intelligence.
+Everything is managed from a browser dashboard: full chat with channels and DMs, node discovery, radio configuration, and live packet feed. Also supports MeshCore traffic through a USB companion. Optionally syncs upstream to [Meshradar](https://meshradar.io) for aggregated multi-site mesh intelligence.
 
 ### Standard Node vs Meshpoint
 
 | | Standard Node | Meshpoint |
 |---|---|---|
-| **Channels** | 1 | 8 |
-| **Demodulators** | 1 | 16 (multi-SF) |
-| **Role** | Participant | Passive observer |
+| **Radio** | Single transceiver | SX1302 concentrator (RX + TX) |
+| **Role** | Participant | Observer + participant |
 | **Packet visibility** | Own traffic | Everything in range |
+| **Messaging** | Phone app only | Full chat from any browser |
 | **Storage** | None | SQLite with retention |
-| **Dashboard** | None | Real-time web UI |
+| **Dashboard** | None | Real-time web UI with radio config |
 
 ---
 
 ## Features
 
-**Dual-protocol capture.** Meshtastic and MeshCore traffic captured simultaneously. The SX1302 handles Meshtastic on 8 channels (SF7-SF12), while a USB MeshCore companion covers MeshCore on its own frequency.
+**Native mesh messaging.** Send and receive Meshtastic messages directly from the dashboard. Broadcast to channels, DM individual nodes, or reply in conversations. MeshCore messaging supported through the USB companion. The SX1302 handles TX using the same sync word and encryption as the mesh network: phones and nodes see your Meshpoint as a regular participant.
+
+**Full chat UI.** Conversations organized by channel and contact. Signal info (SNR, RSSI) on every received bubble. Duplicate badge shows how many times a relayed message was heard. Channel sidebar with LongFast, custom channels, and DM contacts. Message history persisted in SQLite.
+
+**Radio configuration from the dashboard.** Change region, modem preset, frequency, TX power, and duty cycle without SSH. Add and remove channels with custom PSKs. Toggle TX enable/disable. All settings saved to `local.yaml` and survive restarts.
+
+**Node discovery.** Live node cards showing every node your Meshpoint has heard: name, ID, protocol, hardware model, signal strength, battery, and last seen. Click any node to open a detail drawer with signal history and direct message.
+
+**Dual-protocol capture.** Meshtastic and MeshCore traffic captured simultaneously. The SX1302 concentrator handles Meshtastic, while a USB MeshCore companion covers MeshCore on its own frequency.
 
 **Full packet decoding.** 14 Meshtastic portnums decoded: TEXT, POSITION, NODEINFO, TELEMETRY, ROUTING, ADMIN, WAYPOINT, DETECTION_SENSOR, PAXCOUNTER, STORE_FORWARD, RANGE_TEST, TRACEROUTE, NEIGHBORINFO, and MAP_REPORT. 6 MeshCore message types decoded. Device roles (CLIENT, ROUTER, REPEATER, TRACKER, SENSOR) extracted from NodeInfo.
 
-**Private channel decryption.** Configure your private channel PSKs and the Meshpoint decodes traffic on those channels alongside the default key. Supports any number of channels with AES-128 or AES-256 keys.
+**Multi-channel decryption.** Configure private channel PSKs from the dashboard or `local.yaml`. The Meshpoint decodes traffic on those channels alongside the default key and routes messages to the correct conversation. Supports any number of channels with AES-128 or AES-256 keys.
 
-**6 frequency regions.** US, EU_868, ANZ, IN, KR, and SG_923. Select during setup and the concentrator auto-tunes. MeshCore companion radios configure to match automatically.
+**6 frequency regions.** US, EU_868, ANZ, IN, KR, and SG_923. Select during setup or change from the Radio settings page. MeshCore companion radios configure to match automatically.
 
-**Real-time dashboard.** Live map with node positions, color-coded packet feed with decoded payloads, traffic charts, signal analytics, and 24h active node counts. Accessible from any device on your network.
+**Real-time dashboard.** Live map with node positions, color-coded packet feed with frequency and spreading factor columns, traffic charts, signal analytics, and node cards. Accessible from any device on your network.
 
 **Cloud integration.** Optional WebSocket uplink to [Meshradar](https://meshradar.io) for aggregated multi-site mesh intelligence. Fleet management, city-wide maps, and packet history across all your Meshpoints.
 
-**MQTT gateway.** Publish captured packets to community MQTT brokers and Home Assistant. Dual-protocol: Meshtastic (protobuf) and MeshCore (JSON) from a single device. Two-gate privacy model ensures private channel data never leaks. Optional JSON publishing, HA auto-discovery, and configurable location precision.
-
-**Smart relay.** Optional re-broadcast of captured packets via a separate SX1262 radio. Deduplication, token-bucket rate limiting, RSSI-based signal filtering. TX path is independent from RX: transmission never blocks reception.
+**Dual-protocol MQTT gateway.** Publish captured packets to community MQTT brokers and Home Assistant. Dual-protocol: Meshtastic (protobuf) and MeshCore (JSON) from a single device. Two-gate privacy model ensures private channel data never leaks. Optional JSON publishing, HA auto-discovery, and configurable location precision.
 
 **Auto-detect hardware.** RAK Hotspot V2 and SenseCap M1 identified automatically during setup. MeshCore USB companions auto-detected on `/dev/ttyUSB*` and `/dev/ttyACM*`.
 
@@ -74,7 +88,7 @@ The easiest path. RAK/MNTD Hotspot V2 miners (model **RAK7248**) include a Pi 4,
 
 <img src="rak7248.png" width="360" alt="RAK7248 Hotspot V2">
 
-Remove the 4 bottom screws to access the SD card slot. Flash a new card with Raspberry Pi OS 64-bit, run the install script, and you have a Meshpoint in a nice aluminum enclosure.
+Remove the black tape covering the SD card slot and carefully remove SD. Flash a new card with Raspberry Pi OS 64-bit, run the install script, and you have a Meshpoint in a nice aluminum enclosure.
 
 ### Option B: SenseCap M1 (~$40-60)
 
@@ -140,13 +154,13 @@ Open `http://<pi-ip>:8080` for the local dashboard.
                                              │
 ┌──────────┐    ┌──────────┐    ┌────────────┴────────────┐
 │Meshtastic│    │ SX1302/  │    │    Meshpoint (Pi 4)      │
-│ packets  │───▶│ SX1303   │───▶│                          │
-│ (OTA)    │    │ 8-ch RX  │    │  Capture → Decode → API  │
-└──────────┘    └──────────┘    │              │           │
-                                │           Dashboard     │
-┌──────────┐    ┌──────────┐    │          (port 8080)    │
-│ MeshCore │    │  Heltec  │    │                          │
-│ packets  │───▶│  USB     │───▶│                          │
+│ packets  │◀──▶│ SX1303   │◀──▶│                          │
+│ (OTA)    │    │ RX + TX  │    │  Capture → Decode → API  │
+└──────────┘    └──────────┘    │      ▲           │       │
+                                │      │       Dashboard   │
+┌──────────┐    ┌──────────┐    │   Messages    (port 8080)│
+│ MeshCore │    │  Heltec  │    │   + Chat UI              │
+│ packets  │◀──▶│  USB     │◀──▶│                          │
 │ (OTA)    │    │companion │    │                          │
 └──────────┘    └──────────┘    └─────────────────────────┘
 ```
@@ -158,6 +172,7 @@ Open `http://<pi-ip>:8080` for the local dashboard.
 ```bash
 meshpoint status         # service status + config summary
 meshpoint logs           # tail the service journal
+meshpoint report         # full operational report (traffic, signal, system)
 meshpoint restart        # restart the service
 meshpoint meshcore-radio # configure MeshCore companion radio frequency
 sudo meshpoint setup     # re-run config wizard
@@ -177,17 +192,38 @@ FastAPI server on port 8080:
 | `GET /api/analytics/traffic` | Traffic rates and counts |
 | `GET /api/analytics/signal/rssi` | RSSI distribution |
 | `GET /api/device/status` | Device health and uptime |
-| `WS /ws` | Real-time packet stream |
+| `GET /api/config` | Radio, TX, and channel configuration |
+| `PUT /api/config/transmit` | Update TX settings |
+| `PUT /api/config/identity` | Update node ID, long/short name |
+| `PUT /api/config/radio` | Change region, preset, frequency |
+| `POST /api/messages/send` | Send a Meshtastic or MeshCore message |
+| `GET /api/messages/conversations` | Message history by conversation |
+| `WS /ws` | Real-time packet + message stream |
 
 ---
 
 ## Updating
 
 ```bash
-cd /opt/meshpoint && sudo git pull origin main && sudo systemctl restart meshpoint
+cd /opt/meshpoint
+sudo git pull origin main
+sudo systemctl restart meshpoint
 ```
 
 The local dashboard shows an orange update indicator when a new version is available.
+
+### Upgrading from v0.6.x or earlier (one-time)
+
+v0.7.0 ships the core modules as Python source instead of pre-compiled `.so` binaries. If your install predates v0.7.0, `git pull` alone is not sufficient: Python's import machinery would prefer the stale `.cpython-*.so` files over the new source and you'd silently keep running v0.6.x code. Re-run `install.sh` after pulling to clean them up:
+
+```bash
+cd /opt/meshpoint
+sudo git pull origin main
+sudo bash scripts/install.sh
+sudo systemctl restart meshpoint
+```
+
+`install.sh` is idempotent and also subsumes the older v0.6.0-era one-time steps (HAL TX sync word patch, sudoers rule, systemd service install) in the same pass, so this single command covers any path from v0.5.x or v0.6.x up to current. Future updates from v0.7.0 onward go back to plain `git pull` + `restart`.
 
 ---
 
@@ -201,17 +237,33 @@ The local dashboard shows an orange update indicator when a new version is avail
 
 ---
 
-## Documentation
+## Support and documentation
 
+Start with the doc that matches what you are trying to do.
+
+**Setup and configuration**
 - **[Onboarding Guide](docs/ONBOARDING.md):** step-by-step from empty Pi to running Meshpoint
-- **[Configuration Guide](docs/CONFIGURATION.md):** all config options, private channels, relay, upstream, radio tuning
+- **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs DIY, MeshCore companion radios, antennas, what's not supported
+- **[Configuration Guide](docs/CONFIGURATION.md):** all config options, private channels, relay, upstream, MQTT, radio tuning
+- **[Radio Config Explained](docs/RADIO-CONFIG-EXPLAINED.md):** the "why" behind region, spreading factor, bandwidth, custom slots, Part 15 awareness
+- **[MQTT and Meshradar](docs/MQTT-AND-MESHRADAR.md):** the two cloud paths side-by-side, what data flows where, privacy posture
+- **[Network Watchdog](docs/NETWORK-WATCHDOG.md):** how the WiFi auto-recovery service works, default thresholds, re-enabling auto-reboot
+
+**When something goes wrong**
+- **[FAQ](docs/FAQ.md):** quick answers to common questions
+- **[Common Errors](docs/COMMON-ERRORS.md):** searchable catalog of error messages with cause and fix
+- **[Troubleshooting](docs/TROUBLESHOOTING.md):** longer diagnostic flows, recovery from corrupted installs
+
+**Project**
 - **[Changelog](docs/CHANGELOG.md):** version history and release notes
+- **[GitHub Issues](https://github.com/KMX415/meshpoint/issues)** and **[Discussions](https://github.com/KMX415/meshpoint/discussions)** for bugs and questions
+- **[Discord](https://discord.gg/BnhSeFXVY8)** for real-time community support
 
 ---
 
 ## Community
 
-- **Discord:** [discord.gg/Cfuc6Cp4wM](https://discord.gg/Cfuc6Cp4wM)
+- **Discord:** [discord.gg/BnhSeFXVY8](https://discord.gg/BnhSeFXVY8)
 - **Website:** [meshradar.io](https://meshradar.io)
 - **Issues:** [GitHub Issues](https://github.com/KMX415/meshpoint/issues)
 
@@ -229,7 +281,7 @@ AI-assisted contributions are allowed, but contributors should review and unders
 
 ## License
 
-MIT: see [LICENSE](LICENSE). Compiled core modules are distributed separately under a commercial license.
+AGPL-3.0: see [LICENSE](LICENSE). All source code, including HAL bindings, protocol decoders, and packet builders, is published in this repository under the same license.
 
 ---
 

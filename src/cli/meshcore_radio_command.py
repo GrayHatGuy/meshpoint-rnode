@@ -19,10 +19,10 @@ from src.cli.meshcore_radio_config import (
     REGION_PRESETS,
     configure_radio,
     query_radio,
-    verify_radio,
 )
 
 _REBOOT_WAIT_SECONDS = 8
+_PORT_RELEASE_DELAY_SECONDS = 3
 
 _LOCAL_CONFIG_PATH = Path("config/local.yaml")
 
@@ -56,7 +56,7 @@ def run_meshcore_radio(args: argparse.Namespace) -> None:
         _configure_preset(port, region)
 
     _reboot_and_redetect(port)
-    _restart_service()
+    _prompt_reboot_or_restart()
 
 
 def _auto_detect_port() -> str | None:
@@ -70,18 +70,50 @@ def _auto_detect_port() -> str | None:
 
 
 def _stop_service() -> None:
-    """Stop the meshpoint service to release the serial port."""
+    """Stop the meshpoint service to release the serial port.
+
+    A short settle delay gives systemd time to fully tear down the service
+    and let the kernel release the underlying tty before the next caller
+    opens the port. Without this delay, callers can race the teardown and
+    see "Could not read current radio settings" on the first attempt.
+    """
     print("  Stopping meshpoint service...")
     subprocess.run(
         ["sudo", "systemctl", "stop", "meshpoint"],
         check=False,
         capture_output=True,
     )
+    time.sleep(_PORT_RELEASE_DELAY_SECONDS)
 
 
-def _restart_service() -> None:
-    """Restart the meshpoint service."""
-    print("  Restarting meshpoint service...")
+def _prompt_reboot_or_restart() -> None:
+    """Recommend a full reboot, fall back to systemctl restart if declined.
+
+    The companion just rebooted with new radio params. Restarting just the
+    meshpoint service races the still-recovering USB CDC stack and can
+    leave MeshCore in a half-connected state where messages don't flow.
+    A full Pi reboot resets the USB controller and lets the kernel
+    re-enumerate the companion cleanly. That's the reliable path.
+
+    If the user declines the reboot, we still restart the service so the
+    Pi isn't left as a dead Meshpoint, but we warn that MeshCore may need
+    a manual USB unplug to come up cleanly until the next reboot.
+    """
+    print("  MeshCore radio reconfigured.")
+    print("  A reboot is recommended to apply the new settings cleanly.")
+    print()
+
+    try:
+        choice = input("  Reboot the Pi now? [Y/n]: ").strip().lower()
+    except EOFError:
+        choice = ""
+
+    if choice in ("", "y", "yes"):
+        print("  Rebooting...")
+        subprocess.run(["sudo", "reboot", "now"], check=False)
+        return
+
+    print("  Skipping reboot. Restarting meshpoint service for now...")
     result = subprocess.run(
         ["sudo", "systemctl", "restart", "meshpoint"],
         check=False,
@@ -89,8 +121,11 @@ def _restart_service() -> None:
     )
     if result.returncode == 0:
         print("  Service restarted.")
+        print("  Note: MeshCore may need a USB unplug or a `sudo reboot`")
+        print("  to come up cleanly. Check `meshpoint logs` if messages")
+        print("  fail to send.")
     else:
-        print("  Failed to restart. Run: meshpoint logs")
+        print("  Failed to restart service. Run: meshpoint logs")
 
 
 def _show_current(port: str) -> None:
@@ -179,7 +214,16 @@ def _configure_custom(port: str) -> None:
 
 
 def _reboot_and_redetect(original_port: str) -> str:
-    """Wait for companion reboot, re-detect port, verify, update config."""
+    """Wait for companion reboot, then re-detect the port path.
+
+    We deliberately do NOT verify the new config here. Verification
+    requires opening a fresh serial handshake while the companion's
+    USB CDC is still mid-enumeration after the reboot, which races
+    on every kernel/hub combo we have tested. The Pi reboot prompted
+    next is the actual confirmation: after the host USB stack resets,
+    the runtime handshake on the next boot reads back the new config
+    cleanly and surfaces it on the dashboard radio tab.
+    """
     print("  Companion rebooting...")
     time.sleep(_REBOOT_WAIT_SECONDS)
 
@@ -189,34 +233,45 @@ def _reboot_and_redetect(original_port: str) -> str:
         new_port = original_port
 
     if new_port != original_port:
+        # The kernel often assigns a different /dev/tty* number while the
+        # old device node is still being torn down (e.g. ACM0 -> ACM1 on
+        # Heltec V4). That new number is transient: after the Pi reboots
+        # we recommend next, the USB stack starts fresh and the device
+        # almost always re-enumerates back to the original number. So
+        # pinning the transient number into local.yaml is exactly the
+        # wrong move -- it leaves meshpoint pointed at a path that no
+        # longer exists post-reboot. Switch to auto-detect instead so
+        # the source finds the companion wherever it lands.
         print(f"  Device moved from {original_port} to {new_port}")
-        _update_config_port(new_port)
+        _enable_auto_detect()
 
-    verified = verify_radio(new_port)
-    if verified:
-        print(f"  Verified: {verified.summary()}")
-    else:
-        print("  Could not verify (device may still be rebooting).")
-        print("  Settings will apply on next power cycle.")
     print()
 
     return new_port
 
 
-def _update_config_port(new_port: str) -> None:
-    """Patch the meshcore_usb serial_port in local.yaml."""
+def _enable_auto_detect() -> None:
+    """Switch meshcore_usb to auto-detect and clear any pinned port.
+
+    This is the durable fix for ACM-number drift during companion
+    reboots. The runtime source will scan for MeshCore-compatible USB
+    devices on startup and pick whichever one shows up.
+    """
     if not _LOCAL_CONFIG_PATH.exists():
         return
 
     with open(_LOCAL_CONFIG_PATH) as fh:
         config = yaml.safe_load(fh) or {}
 
-    mc_usb = config.get("capture", {}).get("meshcore_usb", {})
-    old_port = mc_usb.get("serial_port")
-    if old_port == new_port:
+    mc_usb = config.get("capture", {}).get("meshcore_usb", {}) or {}
+
+    already_auto = mc_usb.get("auto_detect", False) is True
+    no_pinned_port = mc_usb.get("serial_port") in (None, "")
+    if already_auto and no_pinned_port:
         return
 
-    mc_usb["serial_port"] = new_port
+    mc_usb["auto_detect"] = True
+    mc_usb.pop("serial_port", None)
     config.setdefault("capture", {})["meshcore_usb"] = mc_usb
 
     updated_yaml = yaml.dump(config, default_flow_style=False, sort_keys=False)
@@ -235,4 +290,4 @@ def _update_config_port(new_port: str) -> None:
         )
         Path(tmp_path).unlink(missing_ok=True)
 
-    print(f"  Updated config/local.yaml: meshcore_usb port -> {new_port}")
+    print("  Updated config/local.yaml: meshcore_usb -> auto_detect (port unpinned)")

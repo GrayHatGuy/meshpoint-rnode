@@ -1,5 +1,5 @@
 """
-Mesh Point Provisioning Wizard
+Meshpoint Provisioning Wizard
 
 Interactive tool for pre-configuring SD cards so devices are
 plug-and-play. Run this on your computer with the SD card mounted.
@@ -16,7 +16,7 @@ The wizard walks you through:
     6. Summary + confirmation
 
 All devices are provisioned under your admin account. Friends just
-plug in the device and it auto-registers with Mesh Radar.
+plug in the device and it auto-registers with Meshradar.
 """
 
 from __future__ import annotations
@@ -88,11 +88,11 @@ def main() -> None:
 def _print_banner() -> None:
     print()
     print(f"  {CYAN}{BOLD}╔══════════════════════════════════════╗{RESET}")
-    print(f"  {CYAN}{BOLD}║   Mesh Point Provisioning Wizard     ║{RESET}")
+    print(f"  {CYAN}{BOLD}║    Meshpoint Provisioning Wizard     ║{RESET}")
     print(f"  {CYAN}{BOLD}╚══════════════════════════════════════╝{RESET}")
     print()
-    print(f"  {DIM}Pre-configure SD cards for plug-and-play Mesh Points.{RESET}")
-    print(f"  {DIM}Devices register with your Mesh Radar fleet automatically.{RESET}")
+    print(f"  {DIM}Pre-configure SD cards for plug-and-play Meshpoints.{RESET}")
+    print(f"  {DIM}Devices register with your Meshradar fleet automatically.{RESET}")
     print()
 
 
@@ -129,7 +129,7 @@ def _step_sd_card() -> tuple[Path, Path]:
 def _step_device_name() -> str:
     print(f"  {BOLD}[2/5] Device Name{RESET}")
     print()
-    print(f"  {DIM}A short, descriptive name for this Mesh Point.{RESET}")
+    print(f"  {DIM}A short, descriptive name for this Meshpoint.{RESET}")
     print(f"  {DIM}Shows up in your fleet view on meshradar.io.{RESET}")
     print()
     print(f"  {DIM}  Examples: meshpoint-nyc, meshpoint-denver, kmax-home{RESET}")
@@ -195,7 +195,7 @@ def _step_api_key() -> str:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from src.activation import verify_license_key
 
-    print(f"  {BOLD}[5/5] Mesh Radar API Key{RESET}")
+    print(f"  {BOLD}[5/5] Meshradar API Key{RESET}")
     print()
     print(f"  {DIM}Your API key from meshradar.io > Account > API Keys.{RESET}")
     print(f"  {DIM}All provisioned devices use the same key (your account).{RESET}")
@@ -284,7 +284,7 @@ def _print_done(device_name: str, hostname: str) -> None:
     print(f"  {BOLD}┌──────────────────────────────────────┐{RESET}")
     print(f"  {BOLD}│{RESET}  {CYAN}Text this to your friend:{RESET}           {BOLD}│{RESET}")
     print(f"  {BOLD}│{RESET}                                      {BOLD}│{RESET}")
-    print(f"  {BOLD}│{RESET}  Your Mesh Point is ready!           {BOLD}│{RESET}")
+    print(f"  {BOLD}│{RESET}  Your Meshpoint is ready!            {BOLD}│{RESET}")
     print(f"  {BOLD}│{RESET}  1. Connect the antenna              {BOLD}│{RESET}")
     print(f"  {BOLD}│{RESET}  2. Plug in power                    {BOLD}│{RESET}")
     print(f"  {BOLD}│{RESET}  3. Wait 2 minutes                   {BOLD}│{RESET}")

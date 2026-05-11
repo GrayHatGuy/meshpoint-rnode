@@ -1,0 +1,174 @@
+# Hardware Matrix
+
+A side-by-side reference for choosing concentrator hardware and MeshCore
+companion radios. For high-level options see [README > Hardware](../README.md#hardware).
+For build-from-parts assembly see [Onboarding > Step 2](ONBOARDING.md#step-2-assemble-hardware).
+
+---
+
+## Concentrator Boards
+
+The host is always a **Raspberry Pi 4** (1 GB minimum, 2 GB recommended)
+running 64-bit Raspberry Pi OS Lite. Pi 3 and Pi 5 are not currently
+supported: the compiled core modules are aarch64 binaries built and tested
+on Pi 4. Pi 5 may work but is not validated.
+
+| | RAK Hotspot V2 (RAK7248) | SenseCap M1 | DIY (Pi + RAK2287 + HAT) |
+|---|---|---|---|
+| **Concentrator** | RAK2287 (SX1302) | WM1303 (SX1303) | RAK2287 (SX1302) |
+| **TX support** | Yes (native, with HAL patch) | Yes (native, with HAL patch) | Yes (native, with HAL patch) |
+| **RX channels** | 8 simultaneous | 8 simultaneous | 8 simultaneous |
+| **Spreading factors** | SF7-SF12 simultaneous | SF7-SF12 simultaneous | SF7-SF12 simultaneous |
+| **Form factor** | Pre-assembled metal case | Pre-assembled metal case | Bare or 3D-printed enclosure |
+| **Carrier crypto chip** | None | ATECC608 (auto-detected) | None |
+| **SD card included** | Usually 32 GB | Sometimes 64 GB | Buy separately |
+| **Antenna included** | Yes | Yes | Buy separately |
+| **PSU included** | Yes (USB-C) | Yes (USB-C, into carrier) | Buy separately |
+| **SPI bus latch on hard power loss** | Yes | No | Yes |
+| **Typical price (eBay, used)** | $40-70 | $30-60 | $50-90 (parts) |
+| **Plug-and-play with `install.sh`** | Yes | Yes | Yes |
+
+### What "SPI bus latch" means
+
+The RAK2287 module can latch its SPI bus when power is cut while the
+concentrator is active. The Meshpoint service holds the concentrator in
+GPIO reset during shutdown to prevent this on `sudo reboot` and
+`sudo systemctl restart meshpoint`. **Hard power loss** (yanked cable,
+breaker trip, outage) can still latch and require a full power-off for 10+
+seconds to clear. Repeated hard power loss can permanently damage the
+SX1250 RF front-end. The SenseCap M1 (SX1303 + WM1303) does not have this
+issue.
+
+If your deployment cannot guarantee clean shutdowns, either:
+
+1. Buy a SenseCap M1 instead, or
+2. Add a small UPS (PiSugar, USB battery with passthrough) to the RAK V2.
+
+### Choosing between them
+
+| If... | Buy... |
+|---|---|
+| You want the cheapest path | Whichever is cheaper on eBay this week |
+| Power is occasionally unreliable and you have no UPS | SenseCap M1 |
+| You already own a Pi 4 | DIY: RAK2287 + RAK Pi HAT |
+| You want easiest reflash (back panel access) | RAK Hotspot V2 (4 bottom screws) |
+
+---
+
+## What is NOT supported
+
+| Hardware | Status | Reason |
+|---|---|---|
+| Raspberry Pi 3 | Not supported | Compiled core modules are aarch64 only; not enough RAM headroom for future growth |
+| Raspberry Pi 5 | Not validated | May work but not regularly tested |
+| Raspberry Pi Zero 2 W | Not supported | Insufficient memory and IO for concentrator + dashboard |
+| 32-bit Raspberry Pi OS | Not supported | Core binaries are aarch64 |
+| x86 / x86_64 host | Not supported | Same reason |
+| RAK7268 / RAK7268V2 (commercial gateway) | Not supported | These are LoRaWAN gateways with different firmware path; SX1302 is similar but the platform stack does not match |
+| Helium WHIP / Linxdot Indoor | Not validated | Same chip family as RAK V2 but the carrier varies; community testing welcome |
+| Single-channel SX1276/SX1262 boards | Not for concentrator role | These are single-channel radios. They can run as a [MeshCore USB companion](#meshcore-usb-companion-radios), not as the main concentrator. |
+
+---
+
+## MeshCore USB Companion Radios
+
+Optional. Adds MeshCore RX and TX through a single-channel USB radio
+plugged into the Pi's USB port. Different protocol from Meshtastic, listens
+on a different default frequency.
+
+Flash the radio with the **`companion_radio_usb`** firmware variant from
+[flasher.meshcore.co.uk](https://flasher.meshcore.co.uk/) before plugging
+into the Pi. The setup wizard auto-detects the device and configures its
+frequency to match your region.
+
+### Why a USB companion instead of the SX1302 concentrator?
+
+MeshCore on most regions uses a **62.5 kHz LoRa bandwidth**. The SX1302
+concentrator inside every supported Meshpoint (RAK V2, SenseCap M1,
+RAK2287 DIY) cannot tune below **125 kHz**. That is a hardware limitation
+of the SX1302 baseband, not a software gap, so MeshCore packets at
+62.5 kHz are physically invisible to the concentrator no matter how it is
+configured.
+
+The single-channel SX1262 inside a USB companion radio (Heltec V3/V4,
+T-Beam, etc.) operates well below 125 kHz, so it has no problem
+demodulating MeshCore at 62.5 kHz. Meshpoint then decodes those packets
+natively through its MeshCore decoder. If MeshCore networks in your area
+ever migrate to 125 kHz or wider, the SX1302 will be able to receive them
+directly and the USB companion becomes optional. See
+[ROADMAP](../ROADMAP.md) for the status of dual-protocol HAL work that
+would enable that path.
+
+| Device | Chipset | Notes |
+|---|---|---|
+| Heltec LoRa V3 | ESP32-S3 | Common, inexpensive, validated |
+| Heltec LoRa V4 / V4 OLED | ESP32-S3 | Latest Heltec revision, validated |
+| LilyGo T-Beam | ESP32 | Includes GPS |
+| Heltec Wireless Tracker | ESP32-S3 | Includes GPS and display |
+
+### Heltec V3 vs V4 USB enumeration gotcha
+
+When two Heltec V3/V4 boards are plugged in (or one Heltec V4 with
+different firmwares on different boots), USB enumeration can be
+counterintuitive:
+
+| Firmware on Heltec V4 | Enumerates as | USB ID |
+|---|---|---|
+| MeshCore companion | `heltec_wifi_lora_32 v4` (named device) | `303a:0002` |
+| Meshtastic | USB JTAG/serial debug unit (generic device) | `303a:1001` |
+
+Most users assume the Meshtastic firmware is the "named" one and MeshCore
+is the generic one. It is the opposite. The MeshCore firmware initializes
+TinyUSB so the host sees the friendly board name. The Meshtastic firmware
+on this hardware does not initialize TinyUSB and falls back to the generic
+JTAG/serial endpoint.
+
+If you have both a MeshCore companion and a Meshtastic node attached over
+USB at the same time, **pin the MeshCore serial port explicitly** in
+`local.yaml` to avoid auto-detect grabbing the wrong device:
+
+```yaml
+capture:
+  meshcore_usb:
+    auto_detect: false
+    serial_port: "/dev/ttyACM0"
+```
+
+---
+
+## Antennas
+
+Bundled antennas with RAK V2 and SenseCap M1 work fine for basic indoor or
+window-mounted deployments. For better coverage:
+
+| Use case | Recommended | Notes |
+|---|---|---|
+| Indoor / window | 3-5 dBi omni (bundled is fine) | |
+| Rooftop / pole, line of sight to neighborhood | 6-8 dBi omni | Sweet spot for most urban Meshpoints |
+| Rooftop / tower, distant horizon coverage | 10-12 dBi omni | Flattened radiation pattern, loses very-close low-elevation nodes |
+| Long feedline run (over 30 ft) | LMR-400 cable + the same antenna | Loss in cheap RG-58 dominates the link budget |
+
+> **Always connect the antenna BEFORE powering on.** Transmitting without
+> an antenna damages the radio. RX-only without an antenna is safe but
+> useless.
+
+GPS antenna (u.FL to SMA pigtail) is optional. If your carrier board has a
+u-blox GPS module, plugging in a GPS antenna gives you automatic
+positioning during the setup wizard. Otherwise enter coordinates manually
+(right-click any spot in Google Maps to copy in decimal format).
+
+---
+
+## Power and SD Cards
+
+| Component | Recommended |
+|---|---|
+| PSU | Official Raspberry Pi 4 USB-C PSU (5V 3A). Cheap PSUs cause SD card corruption. |
+| SD card | 32 GB minimum, Class 10 or better. SanDisk High Endurance or Samsung Pro Endurance for 24/7 deployments. |
+| UPS (optional) | PiSugar 3, USB battery with passthrough. Strongly recommended for RAK V2 deployments without reliable mains. |
+| PoE (optional) | Pi 4 PoE+ HAT, or PoE injector + USB-C PD. Useful for rooftop installs. |
+
+Bad PSUs and cheap SD cards are the most common silent failure mode. If
+you see `SyntaxError: source code string cannot contain null bytes` or
+`fatal: loose object is corrupt` in the logs after a power event, the SD
+card took a bad write. See [Troubleshooting > Recovering from a corrupted install](TROUBLESHOOTING.md#recovering-from-a-corrupted-install).

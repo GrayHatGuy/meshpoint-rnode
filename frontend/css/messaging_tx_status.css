@@ -1,0 +1,62 @@
+/* Messaging — TX status surfaces.
+ *
+ * These rules style the TX-availability banner that the messaging tab
+ * shows above the chat thread, plus the radio-monitor toggle in the
+ * sidebar. They live in their own file (rather than messaging.css)
+ * because messaging.css is already near the 500-line cap, and they
+ * used to live in radio.css which was a coupling smell. */
+
+/* TX banner above the messaging thread. */
+
+.msg-tx-banner {
+    padding: 0.5rem 1rem;
+    font-size: 0.78rem;
+    text-align: center;
+}
+
+.msg-tx-banner--warn {
+    background: rgba(245, 158, 11, 0.1);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+    color: var(--accent-amber);
+}
+
+.msg-tx-banner--warn a {
+    color: var(--accent-cyan);
+    text-decoration: underline;
+}
+
+.msg-tx-banner--error {
+    background: rgba(239, 68, 68, 0.1);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--accent-red);
+}
+
+/* Radio-monitor toggle button in the messaging sidebar. */
+
+.msg-sidebar__actions {
+    display: flex;
+    gap: 0.3rem;
+    align-items: center;
+}
+
+.msg-sidebar__monitor-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.2rem 0.4rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.msg-sidebar__monitor-btn:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+.msg-sidebar__monitor-btn--active {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+    background: rgba(6, 182, 212, 0.1);
+}

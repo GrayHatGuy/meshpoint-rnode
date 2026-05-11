@@ -58,6 +58,7 @@ class RelayManager:
         self._enabled = enabled
         self._relay_count = 0
         self._rejected_count = 0
+        self._rejection_reasons: dict[str, int] = {}
         self._transmit_fn: Optional[callable] = None
 
     @property
@@ -107,6 +108,9 @@ class RelayManager:
             self._relay_count += 1
         else:
             self._rejected_count += 1
+            self._rejection_reasons[decision.reason] = (
+                self._rejection_reasons.get(decision.reason, 0) + 1
+            )
             logger.debug(
                 "Relay rejected [%s]: %s from %s",
                 decision.reason,
@@ -139,6 +143,7 @@ class RelayManager:
             "enabled": self._enabled,
             "relayed": self._relay_count,
             "rejected": self._rejected_count,
+            "rejection_reasons": dict(self._rejection_reasons),
             "dedup_cache_size": self._dedup.size,
             "rate_remaining": self._limiter.remaining_capacity,
             "current_rate": self._limiter.current_rate,

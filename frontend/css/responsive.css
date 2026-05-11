@@ -1,0 +1,85 @@
+/* Responsive overrides for the local dashboard.
+ *
+ * This file consolidates @media-query rules for dashboard.css and
+ * messaging.css to keep those source files focused on layout
+ * primitives. Loaded LAST in index.html so it cleanly overrides
+ * the desktop defaults at narrower viewports.
+ *
+ * Card-specific responsive rules (radio.css, radio_cards.css,
+ * stats.css) live alongside their components since they sit well
+ * under the 500-line file budget. */
+
+/* ===== Dashboard tab + global top bar ===== */
+
+@media (max-width: 1024px) {
+    .dashboard__main { grid-template-columns: 1fr; }
+    .dashboard__side { max-height: 300px; }
+    .dashboard { height: auto; overflow: auto; }
+}
+
+@media (max-width: 720px) {
+    .top-bar { padding: 0.5rem 0.75rem; }
+    .top-bar__status {
+        flex-wrap: wrap;
+        row-gap: 0.25rem;
+        column-gap: 0.5rem;
+        font-size: 0.72rem;
+    }
+    .top-bar__divider { display: none; }
+    .top-bar__device { font-size: 0.75rem; }
+    .dashboard__feed { height: auto; min-height: 220px; }
+    .stat-card { min-width: 88px; padding: 0.3rem 0.5rem; }
+    .stat-card__value { font-size: 1rem; }
+    .packet-table th:nth-child(8),
+    .packet-table td:nth-child(8),
+    .packet-table th:nth-child(9),
+    .packet-table td:nth-child(9),
+    .packet-table th:nth-child(10),
+    .packet-table td:nth-child(10),
+    .packet-table th:nth-child(11),
+    .packet-table td:nth-child(11) { display: none; }
+}
+
+@media (max-width: 640px) {
+    .top-bar {
+        flex-direction: column;
+        gap: 0.4rem;
+        align-items: flex-start;
+    }
+    .top-bar__brand { width: 100%; }
+    .top-bar__status { width: 100%; }
+    .top-bar__brand h1 { font-size: 0.95rem; }
+    .packet-table { font-size: 0.7rem; }
+    .packet-table th, .packet-table td { padding: 0.3rem 0.4rem; }
+    .packet-table th:nth-child(7),
+    .packet-table td:nth-child(7) { display: none; }
+}
+
+/* ===== Messaging tab ===== */
+
+@media (max-width: 768px) {
+    .messaging {
+        flex-direction: column;
+        height: calc(100vh - 120px);
+    }
+    .msg-sidebar {
+        width: 100%;
+        min-width: 0;
+        max-height: 38%;
+        border-right: none;
+        border-bottom: 1px solid var(--border, #2a2a4a);
+    }
+    .msg-chat {
+        width: 100%;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .msg-bubble { max-width: 85%; }
+}
+
+@media (max-width: 480px) {
+    .messaging { height: calc(100vh - 100px); }
+    .msg-sidebar { max-height: 42%; }
+    .msg-chat__header { padding: 0.5rem 0.75rem; }
+    .msg-chat__messages { padding: 0.6rem; }
+}

@@ -1,6 +1,6 @@
 /**
- * Leaflet map with marker clustering for the local Mesh Point dashboard.
- * Displays the Mesh Point device and captured nodes with protocol-colored markers.
+ * Leaflet map with marker clustering for the local Meshpoint dashboard.
+ * Displays the Meshpoint device and captured nodes with protocol-colored markers.
  */
 class NodeMap {
     constructor(containerId) {
@@ -29,6 +29,10 @@ class NodeMap {
             maxZoom: 19,
         }).addTo(this._map);
 
+        this._topologyLayer = L.layerGroup();
+        this._topologyVisible = false;
+        this._focusLine = null;
+
         this._markerGroup = L.markerClusterGroup({
             maxClusterRadius: 50,
             disableClusteringAtZoom: 13,
@@ -47,6 +51,22 @@ class NodeMap {
             },
         });
         this._map.addLayer(this._markerGroup);
+
+        const overlays = { 'Topology Links': this._topologyLayer };
+        L.control.layers(null, overlays, { position: 'topright', collapsed: true }).addTo(this._map);
+
+        this._map.on('overlayadd', (e) => {
+            if (e.layer === this._topologyLayer) {
+                this._topologyVisible = true;
+                this._loadTopology();
+            }
+        });
+        this._map.on('overlayremove', (e) => {
+            if (e.layer === this._topologyLayer) {
+                this._topologyVisible = false;
+            }
+        });
+
         this._initialized = true;
     }
 
@@ -97,10 +117,10 @@ class NodeMap {
             zIndexOffset: 1000,
         });
 
-        const name = device.device_name || 'Mesh Point';
+        const name = device.device_name || 'Meshpoint';
         this._deviceMarker.bindPopup(
             `<strong>${this._esc(name)}</strong><br>` +
-            `Type: Mesh Point<br>` +
+            `Type: Meshpoint<br>` +
             `Lat: ${device.latitude.toFixed(4)}<br>` +
             `Lon: ${device.longitude.toFixed(4)}`
         );
@@ -136,6 +156,29 @@ class NodeMap {
 
         this._markerGroup.addLayer(marker);
         this._markers[n.node_id] = marker;
+    }
+
+    drawFocusLine(sourceNodeId) {
+        this.clearFocusLine();
+        if (!this._initialized || !this._deviceMarker) return;
+        const srcMarker = this._markers[sourceNodeId];
+        if (!srcMarker) return;
+
+        this._focusLine = L.polyline(
+            [srcMarker.getLatLng(), this._deviceMarker.getLatLng()],
+            { color: '#f59e0b', weight: 3, opacity: 0.9 }
+        ).addTo(this._map);
+    }
+
+    clearFocusLine() {
+        if (this._focusLine) {
+            this._map.removeLayer(this._focusLine);
+            this._focusLine = null;
+        }
+    }
+
+    centerOn(lat, lng, zoom = 15) {
+        if (this._map) this._map.flyTo([lat, lng], zoom);
     }
 
     updateFromPacket(packet) {
@@ -174,6 +217,42 @@ class NodeMap {
                 line.setStyle({ opacity });
             }
         }, 200);
+    }
+
+    async _loadTopology() {
+        try {
+            const res = await fetch('/api/analytics/topology');
+            const links = await res.json();
+            this._topologyLayer.clearLayers();
+
+            for (const link of links) {
+                const srcMarker = this._markers[link.source];
+                const tgtMarker = this._markers[link.target];
+                if (!srcMarker || !tgtMarker) continue;
+
+                const line = L.polyline(
+                    [srcMarker.getLatLng(), tgtMarker.getLatLng()],
+                    {
+                        color: '#f59e0b',
+                        weight: 1.5,
+                        opacity: 0.6,
+                        dashArray: '4, 4',
+                    },
+                );
+
+                const rssiLabel = link.rssi != null ? `RSSI: ${link.rssi} dBm` : '';
+                const snrLabel = link.snr != null ? `SNR: ${link.snr} dB` : '';
+                const tooltip = [
+                    `${link.source} ↔ ${link.target}`,
+                    rssiLabel, snrLabel,
+                ].filter(Boolean).join('<br>');
+                line.bindTooltip(tooltip);
+
+                this._topologyLayer.addLayer(line);
+            }
+        } catch (e) {
+            console.error('Topology load failed:', e);
+        }
     }
 
     _esc(str) {

@@ -1,4 +1,4 @@
-"""System-level hardware metrics for the Mesh Point host."""
+"""System-level hardware metrics for the Meshpoint host."""
 
 from __future__ import annotations
 

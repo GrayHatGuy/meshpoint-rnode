@@ -1,11 +1,6 @@
-"""Routes raw captured bytes to the appropriate protocol decoder.
-
-This is a stub module. The compiled core module (.so) overrides this
-at runtime when meshpoint-core is installed.
-"""
-
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from src.decode.crypto_service import CryptoService
@@ -14,16 +9,18 @@ from src.decode.meshcore_decoder import MeshcoreDecoder
 from src.models.packet import Packet, Protocol
 from src.models.signal import SignalMetrics
 
-_CORE_MISSING = (
-    "meshpoint-core is required for packet routing. "
-    "See README.md for installation instructions."
-)
+logger = logging.getLogger(__name__)
+
+MESHTASTIC_SYNC_WORD = 0x2B
 
 
 class PacketRouter:
     """Routes raw captured bytes to the appropriate protocol decoder.
 
-    Requires the compiled meshpoint-core module.
+    Protocol detection strategy:
+    - If the capture source provides protocol hint, use it directly
+    - Otherwise attempt Meshtastic decode first (most common),
+      then fall back to Meshcore
     """
 
     def __init__(self, crypto: CryptoService):
@@ -44,4 +41,46 @@ class PacketRouter:
         signal: Optional[SignalMetrics] = None,
         protocol_hint: Optional[Protocol] = None,
     ) -> Optional[Packet]:
-        raise RuntimeError(_CORE_MISSING)
+        if protocol_hint == Protocol.MESHTASTIC:
+            packet = self._meshtastic.decode(raw_bytes, signal)
+            if packet:
+                logger.info(
+                    "Meshtastic packet (hint) type=%s src=%s decrypted=%s",
+                    packet.packet_type.value, packet.source_id, packet.decrypted,
+                )
+            return packet
+
+        if protocol_hint == Protocol.MESHCORE:
+            packet = self._meshcore.decode(raw_bytes, signal)
+            if packet:
+                logger.info(
+                    "Meshcore packet (hint) type=%s src=%s decrypted=%s",
+                    packet.packet_type.value, packet.source_id, packet.decrypted,
+                )
+            return packet
+
+        packet = self._meshtastic.decode(raw_bytes, signal)
+        if packet and packet.decrypted:
+            logger.info(
+                "Decoded %s packet (type=%s, src=%s)",
+                packet.protocol.value, packet.packet_type.value, packet.source_id,
+            )
+            return packet
+
+        meshcore_packet = self._meshcore.decode(raw_bytes, signal)
+        if meshcore_packet and meshcore_packet.decrypted:
+            logger.info(
+                "Decoded %s packet (type=%s, src=%s)",
+                meshcore_packet.protocol.value,
+                meshcore_packet.packet_type.value,
+                meshcore_packet.source_id,
+            )
+            return meshcore_packet
+
+        result = packet or meshcore_packet
+        if result:
+            logger.info(
+                "Undecrypted packet classified as %s (src=%s, %d bytes)",
+                result.protocol.value, result.source_id, len(raw_bytes),
+            )
+        return result

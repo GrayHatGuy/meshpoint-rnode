@@ -1,18 +1,18 @@
-# Mesh Point Onboarding Guide
+# Meshpoint Onboarding Guide
 
-Step-by-step instructions for building and deploying a Mesh Point -- from an empty Raspberry Pi to a fully operational node feeding data to the Mesh Radar cloud platform.
+Step-by-step instructions for building and deploying a Meshpoint: from an empty Raspberry Pi to a fully operational node feeding data to the Meshradar cloud platform.
 
 ---
 
 ## What You're Building
 
-A **Mesh Point** is an edge device that:
+A **Meshpoint** is an edge device that:
 
 - Listens to **Meshtastic** traffic on 8 LoRa channels simultaneously via an SX1302/SX1303 concentrator
+- **Sends and receives Meshtastic messages** directly from the browser dashboard (native TX via the concentrator)
 - Optionally monitors **MeshCore** traffic via a USB companion radio
-- Decodes, stores, and visualizes packets on a local dashboard
-- Optionally relays packets back onto the mesh via a separate SX1262 radio
-- Ships data upstream to the Mesh Radar cloud platform for regional mesh intelligence
+- Decodes, stores, and visualizes packets on a real-time dashboard with full chat UI, node discovery, and radio configuration
+- Ships data upstream to the [Meshradar](https://meshradar.io) cloud platform for regional mesh intelligence
 
 ## Hardware Requirements
 
@@ -21,14 +21,13 @@ You need a Raspberry Pi 4 with an SX1302 or SX1303 LoRa concentrator. The easies
 | Component | Purpose | Notes |
 |-----------|---------|-------|
 | **Raspberry Pi 4** (1-2GB RAM) | Host computer | 1GB works, 2GB recommended for future updates |
-| **SX1302/SX1303 Concentrator** | Multi-channel LoRa receiver | RAK2287 (SX1302) or Seeed WM1303 (SX1303) |
+| **SX1302/SX1303 Concentrator** | Multi-channel LoRa RX + TX | RAK2287 (SX1302) or Seeed WM1303 (SX1303) |
 | **Carrier board / Pi HAT** | Mounts the concentrator to the Pi | RAK Pi HAT, SenseCap M1 carrier, or WM1302 Pi HAT |
 | **microSD card** (32GB) | Boot drive | Class 10 or better |
 | **USB-C power supply** (5V 3A) | Power | Official Pi PSU recommended |
-| **LoRa antenna** (906 MHz) | Reception | 10 dBi gain recommended for US915 band |
+| **LoRa antenna** (906 MHz) | RX + TX | 10 dBi gain recommended for US915 band |
 | **Ethernet cable or WiFi** | Network connectivity | Needed for cloud uplink |
 | **Optional: MeshCore USB companion** | MeshCore traffic monitor | Heltec V3/V4 or T-Beam with [USB companion firmware](https://flasher.meshcore.co.uk/) |
-| **Optional: SX1262 radio** | Relay transmitter | T-Beam, Heltec V3, or RAK4631 running Meshtastic firmware |
 
 ### Supported Pre-Built Units
 
@@ -45,7 +44,7 @@ RAK Hotspot V2: remove 4 bottom screws to access the SD card. SenseCap M1: remov
 
 - A computer with an SD card reader (for flashing)
 - SSH client (PuTTY on Windows, or built-in terminal on Mac/Linux)
-- A [Mesh Radar](https://meshradar.io) account (free -- create one before starting)
+- A [Meshradar](https://meshradar.io) account (free: create one before starting)
 
 ---
 
@@ -83,7 +82,7 @@ RAK Hotspot V2: remove 4 bottom screws to access the SD card. SenseCap M1: remov
 2. Connect the LoRa antenna to the SMA port. **Never power the concentrator without an antenna connected** -- this can damage the radio.
 3. If your carrier board has a GPS module and you have a GPS antenna, connect it to the u.FL connector.
 4. Mount the carrier board onto the Raspberry Pi's GPIO header.
-5. If using an SX1262 relay radio, connect it to one of the Pi's USB ports.
+5. If using a MeshCore USB companion, connect it to one of the Pi's USB ports.
 6. Connect Ethernet (if not using WiFi).
 7. Connect the power supply.
 
@@ -114,11 +113,10 @@ Enter the password you set during imaging.
 ```bash
 sudo apt update && sudo apt install -y git
 sudo git clone https://github.com/KMX415/meshpoint.git /opt/meshpoint
-cd /opt/meshpoint
-sudo ./scripts/install.sh
+sudo bash /opt/meshpoint/scripts/install.sh
 ```
 
-The install script handles everything: system packages, SPI/UART/GPS kernel configuration, building the LoRa concentrator driver, Python virtual environment, dependencies, and systemd service installation.
+The install script handles everything: system packages, SPI/UART/GPS kernel configuration, building the LoRa concentrator driver with Meshtastic TX patches, Python virtual environment, dependencies, systemd service, and permissions setup.
 
 This takes 5-15 minutes depending on your internet speed and Pi model.
 
@@ -148,18 +146,21 @@ sudo meshpoint setup
 
 > **Note:** `sudo` is required — the wizard writes to `/opt/meshpoint/config/local.yaml` which is owned by root.
 
-The wizard walks you through 8 steps:
+The wizard walks you through these steps:
 
 1. **Hardware Detection** -- probes for concentrator, carrier board, GPS, serial radios, USB MeshCore devices
 2. **Frequency Region** -- select your Meshtastic region (US, EU_868, ANZ, IN, KR, SG_923). The concentrator auto-tunes to the correct frequency
 3. **Capture Source** -- auto-selects concentrator, serial, or mock. If a MeshCore USB companion is detected, offers to enable it and configure its radio frequency to match your region
-4. **API Key** -- paste your Mesh Radar API key
-5. **Device Name** -- give it a recognizable name (e.g. "Mesh Point Rooftop")
-6. **Location** -- use GPS fix or enter lat/lng manually (right-click Google Maps to copy)
-7. **Relay Radio** -- configure optional SX1262 relay
-8. **Device ID** -- auto-generated unique identifier
+4. **MQTT** -- optional MQTT publishing to community brokers and Home Assistant
+5. **API Key** -- paste your Meshradar API key
+6. **Device Name** -- give it a recognizable name (e.g. "Meshpoint Rooftop")
+7. **Location** -- use GPS fix or enter lat/lng manually (right-click Google Maps to copy)
+8. **Node Identity** -- a unique random Meshtastic node ID, long name, and short name are auto-generated. You can customize these later from the Radio settings page on the dashboard
+9. **Device ID** -- auto-generated unique identifier for cloud registration
 
 The wizard writes `config/local.yaml` and offers to start the service.
+
+> **After setup:** TX is disabled by default. Enable it from the dashboard Radio settings page once you've verified RX is working.
 
 ### Step 9: Verify It's Working
 
@@ -168,18 +169,21 @@ meshpoint status
 ```
 
 Check the local dashboard at `http://<your-pi-ip>:8080`. You should see:
-- A map showing your device's location
-- Live packet feed (once LoRa traffic is in range)
-- Signal strength charts
-- CPU, RAM, disk, and temperature metrics
+- **Map** showing your device's location and discovered nodes
+- **Packet feed** with live Meshtastic and MeshCore traffic (once LoRa devices are in range)
+- **Messaging tab** for sending and receiving Meshtastic messages (enable TX in Radio settings first)
+- **Nodes grid** with cards for every discovered node: name, signal, hardware, battery
+- **Radio settings** page to configure region, modem preset, frequency, TX, and channels
+- **Signal charts** and traffic analytics
+- **System metrics**: CPU, RAM, disk, temperature
 
-Check the cloud dashboard at [meshradar.io](https://meshradar.io). Your Mesh Point should appear as a green dot in the fleet view within a minute.
+Check the cloud dashboard at [meshradar.io](https://meshradar.io). Your Meshpoint should appear as a green dot in the fleet view within a minute.
 
 ---
 
 ## Adding a MeshCore Companion (Optional)
 
-A MeshCore USB companion gives your Mesh Point the ability to monitor MeshCore mesh traffic alongside Meshtastic. It's a single-channel radio that listens on one frequency -- all standard MeshCore traffic in your region uses the same frequency, so the regional preset covers everything.
+A MeshCore USB companion gives your Meshpoint the ability to monitor MeshCore mesh traffic alongside Meshtastic. It's a single-channel radio that listens on one frequency -- all standard MeshCore traffic in your region uses the same frequency, so the regional preset covers everything.
 
 ### What You Need
 
@@ -199,7 +203,7 @@ A Heltec or T-Beam board flashed with **USB Serial Companion** firmware. Support
 3. Choose the **`companion_radio_usb`** firmware variant (not BLE)
 4. Connect the device via USB and click Flash
 
-> **Important:** The USB companion firmware disables Bluetooth. Radio parameters (frequency, bandwidth, etc.) can only be configured over serial -- either through the Mesh Point setup wizard or manually via Python. The setup wizard handles this automatically.
+> **Important:** The USB companion firmware disables Bluetooth. Radio parameters (frequency, bandwidth, etc.) can only be configured over serial -- either through the Meshpoint setup wizard or manually via Python. The setup wizard handles this automatically.
 
 ### Step 2: Plug Into the Pi and Run Setup
 
@@ -226,7 +230,7 @@ Other regions prompt for custom frequency entry. You can also change the MeshCor
 After setup, both capture sources start automatically on boot. You'll see them in the startup banner:
 
 ```
-Source  concentrator (SX1302 8-ch), MeshCore USB node
+Source  concentrator (SX1302), MeshCore USB node
 ```
 
 ### Changing MeshCore Radio Frequency
@@ -246,16 +250,17 @@ The command auto-detects the USB port, stops the service, configures the radio, 
 | | SX1302/SX1303 Concentrator | MeshCore USB Companion |
 |---|---|---|
 | **Protocol** | Meshtastic | MeshCore |
+| **Direction** | RX + TX (native) | RX + TX (via companion) |
 | **Channels** | 8 simultaneous | 1 |
 | **Spreading factors** | SF7-SF12 all at once | Fixed (SF7 default) |
 | **Connection** | SPI (internal HAT) | USB serial |
-| **Configuration** | Automatic via HAL | Region preset via wizard |
+| **Configuration** | Dashboard Radio settings | Region preset via wizard |
 
 ---
 
 ## Pre-Provisioned Device (Received from Someone)
 
-If you received a pre-built Mesh Point, all the software is already configured. You just need to set it up physically.
+If you received a pre-built Meshpoint, all the software is already configured. You just need to set it up physically.
 
 ### What's in the Box
 
@@ -286,12 +291,15 @@ To find the device IP, check your router's DHCP client list for the device name 
 
 ### What You'll See
 
-- **Live Packet Feed** -- real-time Meshtastic and Meshcore packets from your area
+- **Packet Feed** -- real-time Meshtastic and MeshCore packets from your area
+- **Messaging** -- send and receive messages on the mesh (if TX is enabled)
+- **Node Cards** -- every discovered node with name, signal, hardware, battery
 - **Node Map** -- discovered mesh nodes plotted on a map
+- **Radio Settings** -- configure region, modem preset, frequency, TX, and channels
 - **Signal Charts** -- RSSI distribution and traffic over time
 - **Device Metrics** -- CPU, RAM, disk usage, temperature
 
-The device also sends data to the Mesh Radar cloud platform. Your device operator can see your Mesh Point status and metrics from the cloud dashboard.
+The device also sends data to the Meshradar cloud platform. Your device operator can see your Meshpoint status and metrics from the cloud dashboard.
 
 ### Troubleshooting
 
@@ -301,7 +309,7 @@ The device also sends data to the Mesh Radar cloud platform. Your device operato
 
 ---
 
-## Managing Your Mesh Point
+## Managing Your Meshpoint
 
 ### CLI Commands
 
@@ -309,6 +317,7 @@ The device also sends data to the Mesh Radar cloud platform. Your device operato
 |---------|-------------|
 | `meshpoint status` | Show device health, uptime, and connection status |
 | `meshpoint logs` | Tail the live service logs |
+| `meshpoint report` | Full operational report: traffic, signal, system metrics |
 | `meshpoint restart` | Restart the service (applies config changes) |
 | `meshpoint stop` | Stop the service |
 | `meshpoint meshcore-radio` | Configure MeshCore companion radio frequency |
@@ -320,23 +329,41 @@ The device also sends data to the Mesh Radar cloud platform. Your device operato
 
 ### Editing Configuration
 
-User-specific settings live in `/opt/meshpoint/config/local.yaml`. Default settings are in `config/default.yaml` -- do not edit that file.
+Most settings can now be changed from the **Radio settings** page on the dashboard: region, modem preset, frequency, TX power, channels, and node identity. Changes save to `local.yaml` automatically.
+
+For advanced settings not exposed in the UI, edit the file directly:
 
 ```bash
 sudo nano /opt/meshpoint/config/local.yaml
 meshpoint restart
 ```
 
+Default settings are in `config/default.yaml`: do not edit that file.
+
 ### Updating
 
 ```bash
 cd /opt/meshpoint
 sudo git pull origin main
-sudo /opt/meshpoint/venv/bin/pip install -r requirements.txt
-sudo reboot
+sudo systemctl restart meshpoint
 ```
 
-A reboot ensures all changes take effect cleanly (kernel modules, SPI state, MeshCore companion). Reboots are safe — the systemd service holds the concentrator in reset during shutdown to prevent SPI bus latch.
+The local dashboard shows an orange update indicator when a new version is available on GitHub.
+
+### Upgrading from v0.6.x or earlier (one-time)
+
+v0.7.0 ships the core modules as Python source instead of pre-compiled `.so` binaries. If your install predates v0.7.0, `git pull` alone is not sufficient: Python's import machinery would prefer the stale `.cpython-*.so` files over the new source and you'd silently keep running v0.6.x code. Re-run `install.sh` after pulling to clean them up:
+
+```bash
+cd /opt/meshpoint
+sudo git pull origin main
+sudo bash scripts/install.sh
+sudo systemctl restart meshpoint
+```
+
+`install.sh` is idempotent and also subsumes the older v0.6.0-era one-time steps (HAL TX sync word patch, sudoers rule, systemd service install) in the same pass, so this single command covers any path from v0.5.x or v0.6.x up to current. Future updates from v0.7.0 onward go back to plain `git pull` + `restart`.
+
+A reboot ensures all changes take effect cleanly (kernel modules, SPI state, MeshCore companion). Reboots are safe: the systemd service holds the concentrator in reset during shutdown to prevent SPI bus latch.
 
 **If the concentrator fails to start** with `lgw_start() failed` or `Failed to set SX1250_0 in STANDBY_RC mode`, the SPI bus latched due to a hard power cut. Fix it with a full power cycle:
 
@@ -348,142 +375,38 @@ Wait for the green LED to stop blinking, then unplug for 10+ seconds and plug ba
 
 **Important:** Always shut down gracefully with `sudo poweroff` before unplugging. Hard power cuts (yanked cable, power outage) can corrupt the SD card and latch the RAK2287's SPI bus. Repeated hard power loss can permanently damage the SX1250 radio.
 
-### Recovering from a Corrupted Install
-
-If `meshpoint logs` shows `SyntaxError: source code string cannot contain null bytes` or `git pull` fails with `error: inflate` / `fatal: loose object is corrupt`, the SD card took a bad write (usually from a hard power cut). Fix it with a clean re-clone:
-
-```bash
-cd /opt/meshpoint
-sudo cp -r data/ /tmp/meshpoint-data-backup
-sudo cp config/local.yaml /tmp/local-yaml-backup
-cd /
-sudo rm -rf /opt/meshpoint
-sudo git clone https://github.com/KMX415/meshpoint.git /opt/meshpoint
-sudo cp -r /tmp/meshpoint-data-backup /opt/meshpoint/data/
-sudo cp /tmp/local-yaml-backup /opt/meshpoint/config/local.yaml
-sudo chmod 777 /opt/meshpoint/data
-sudo chmod 666 /opt/meshpoint/data/*.db
-sudo python3 -m venv /opt/meshpoint/venv
-sudo /opt/meshpoint/venv/bin/pip install -r /opt/meshpoint/requirements.txt
-sudo systemctl restart meshpoint
-```
-
-This preserves your packet database and device config. The venv must be recreated since it is not tracked by git.
-
-### Using pip on Raspberry Pi OS
-
-Raspberry Pi OS (Bookworm and later) uses PEP 668 externally-managed environments. Never use the system `pip` directly — always use the venv:
-
-```bash
-sudo /opt/meshpoint/venv/bin/pip install -r requirements.txt
-```
-
-Running `sudo pip install ...` without the venv path will fail with `error: externally-managed-environment`.
-
----
-
-## Troubleshooting
-
-### Service won't start
-
-```bash
-meshpoint logs
-```
-
-Common issues:
-- **"No module named 'src'"**: Check that `/opt/meshpoint` contains the source code.
-- **"Permission denied: /dev/spidev0.0"**: Run `sudo usermod -a -G spi meshpoint`
-- **"No module named 'psutil'"**: Run `sudo /opt/meshpoint/venv/bin/pip install psutil`
-- **"no GPIO tool found (pinctrl or gpioset)"**: This means the concentrator reset script can't toggle GPIO. Raspberry Pi OS Lite (64-bit) includes `pinctrl` by default. If you're on a non-standard image, install `gpiod`: `sudo apt install -y gpiod`
-
-### Concentrator fails to start after update
-
-If logs show `lgw_start() failed` or `Failed to set SX1250_0 in STANDBY_RC mode`:
-
-The SPI bus latched due to a hard power cut. `sudo reboot` and `meshpoint restart` normally prevent this, but a hard power loss (yanked cable, outage) can still cause it. Do a full power cycle:
-
-1. `sudo poweroff`
-2. Wait for the green LED to stop blinking
-3. Unplug power for 10+ seconds, then plug back in
-
-### Database errors after update
-
-If logs show `sqlite3.OperationalError: table nodes has no column named <column>`:
-
-The database schema is older than the current code. The service runs automatic migrations on startup. If it fails with `attempt to write a readonly database`, fix permissions:
-
-```bash
-sudo chmod 777 /opt/meshpoint/data
-sudo chmod 666 /opt/meshpoint/data/*.db
-sudo systemctl restart meshpoint
-```
-
-### Concentrator starts but receives no packets
-
-If the logs show `SX1302 concentrator started` and `Sync word set to 0x2B` but the receive loop consistently reports `0 pkt this cycle`, the SX1250 radio's analog front-end may be damaged. This typically happens after:
-
-- Repeated power loss events (storms, breaker trips, yanked cables)
-- SPI bus latch events (the `lgw_start() failed` error, even if resolved by power cycling)
-
-The SX1250's digital SPI interface can recover while the RF receive path remains non-functional. To confirm: test a known-working Meshtastic device within a few meters. If still zero packets, the RAK2287 module needs replacement (~$50-60). The Pi and carrier board are unaffected.
-
-### No LoRa packets captured
-
-- Verify the concentrator is detected: `ls /dev/spidev0.*`
-- Verify libloragw is installed: `ls /usr/local/lib/libloragw.so`
-- Check that there are Meshtastic/Meshcore devices transmitting in your area
-- Verify the antenna is connected
-
-### MeshCore companion not receiving packets
-
-- Verify the device is detected: `ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null`
-- Check that the companion is running USB companion firmware (not BLE)
-- Verify radio frequency matches your region -- re-run `sudo meshpoint setup` to reconfigure
-- Check logs: `meshpoint logs | grep -i meshcore`
-- If the device was recently plugged in, unplug and re-plug to reset the serial connection
-
-### Not appearing on cloud dashboard
-
-1. Check that `upstream.enabled` is `true` in your local config
-2. Verify your API key is correct
-3. Check logs: `meshpoint logs | grep -i upstream`
-4. Make sure the Pi has internet access: `ping google.com`
-
-### Remote commands not working
-
-1. Check the fleet view on meshradar.io -- device should show as "Online"
-2. Try a Ping command from the fleet panel
-3. Check logs: `meshpoint logs | grep -i "command\|response"`
+For troubleshooting, corrupted install recovery, and pip issues, see [Troubleshooting](TROUBLESHOOTING.md).
 
 ---
 
 ## Network Architecture
 
 ```
-   Your Mesh Point (Raspberry Pi)
+   Your Meshpoint (Raspberry Pi)
    ┌──────────────────────────────────┐
    │  SX1302/SX1303 (SPI)              │
-   │    └─ Meshtastic 8-ch RX         │
+   │    ├─ Meshtastic RX (8 ch)       │
+   │    └─ Meshtastic TX (native)     │
    │  MeshCore companion (USB serial)  │
-   │    └─ MeshCore single-ch RX      │
-   │  SX1262 Radio (USB serial)       │
-   │    └─ Relay TX                   │
+   │    └─ MeshCore RX + TX           │
    │  ZOE-M8Q GPS (UART)              │
    │    └─ Device positioning         │
    │                                  │
-   │  Mesh Point Software             │
+   │  Meshpoint Software               │
    │    ├─ Dual-protocol capture      │
    │    ├─ Protocol decoding          │
+   │    ├─ Chat UI + messaging        │
+   │    ├─ Radio config dashboard     │
+   │    ├─ Node discovery             │
    │    ├─ Local SQLite storage       │
-   │    ├─ Relay decision engine      │
    │    ├─ Local web dashboard        │
    │    └─ WebSocket upstream ────────┼── meshradar.io
    └──────────────────────────────────┘       │
                                               ▼
                                        Cloud Dashboard
-                                       (all Mesh Points
+                                       (all Meshpoints
                                         aggregated on
                                         a shared map)
 ```
 
-Each Mesh Point operates independently with its own local dashboard. When connected to the cloud, all Mesh Points contribute to a shared regional view where you can see every node and Mesh Point across the network.
+Each Meshpoint operates independently with its own local dashboard. When connected to the cloud, all Meshpoints contribute to a shared regional view where you can see every node and Meshpoint across the network.

@@ -1,0 +1,290 @@
+.stats-panel {
+    padding: 1.5rem;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.stats-panel__loading {
+    color: var(--text-secondary, #94a3b8);
+    text-align: center;
+    padding: 4rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+}
+
+/* --- Hero --- */
+.stats-hero {
+    margin-bottom: 28px;
+}
+
+.stats-hero__number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 48px;
+    font-weight: 700;
+    color: #06b6d4;
+    text-shadow: 0 0 40px rgba(6, 182, 212, 0.2);
+    line-height: 1;
+}
+
+.stats-hero__label {
+    font-size: 15px;
+    color: var(--text-secondary, #94a3b8);
+    margin-left: 10px;
+}
+
+/* --- Top stat strip --- */
+.stats-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 32px;
+}
+
+.stats-strip__card {
+    background: var(--card-bg, #111827);
+    border: 1px solid var(--border, #1e293b);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stats-strip__value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary, #f1f5f9);
+}
+
+.stats-strip__label {
+    font-size: 11px;
+    color: var(--text-secondary, #94a3b8);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* --- Sections --- */
+.stats-section {
+    margin-bottom: 32px;
+}
+
+.stats-section__title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+}
+
+/* --- Signal number cards (4-across) --- */
+.stats-signal-nums {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.stats-signal-num {
+    background: var(--card-bg, #111827);
+    border: 1px solid var(--border, #1e293b);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+}
+
+.stats-signal-num__label {
+    font-size: 10px;
+    color: var(--text-secondary, #94a3b8);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.stats-signal-num__value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: #06b6d4;
+}
+
+/* --- Chart cards --- */
+.stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.stats-card {
+    background: var(--card-bg, #111827);
+    border: 1px solid var(--border, #1e293b);
+    border-radius: 12px;
+    padding: 16px;
+    min-height: 260px;
+}
+
+.stats-card--full {
+    grid-column: 1 / -1;
+}
+
+.stats-card__label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary, #f1f5f9);
+    margin-bottom: 2px;
+}
+
+.stats-card__desc {
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 8px;
+    line-height: 1.3;
+}
+
+.stats-card canvas {
+    width: 100% !important;
+    max-height: 220px;
+}
+
+/* --- Range cards --- */
+.stats-range-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.stats-range-card {
+    background: var(--card-bg, #111827);
+    border: 1px solid var(--border, #1e293b);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.stats-range-card__header {
+    font-size: 12px;
+    color: var(--text-secondary, #94a3b8);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+}
+
+.stats-range-card__desc {
+    font-size: 10px;
+    color: #64748b;
+    margin-bottom: 8px;
+    line-height: 1.3;
+}
+
+.stats-range-card__value {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.stats-range-card__miles {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: #06b6d4;
+}
+
+.stats-range-card__unit {
+    font-size: 14px;
+    color: var(--text-secondary, #94a3b8);
+}
+
+.stats-range-card__detail {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 10px;
+}
+
+.stats-range-bar {
+    height: 6px;
+    background: var(--border, #1e293b);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.stats-range-bar__fill {
+    height: 100%;
+    background: linear-gradient(90deg, #06b6d4, #22c55e);
+    border-radius: 3px;
+    transition: width 0.8s ease;
+    width: 0;
+}
+
+.stats-range-bar__fill--mesh {
+    background: linear-gradient(90deg, #a855f7, #f59e0b);
+}
+
+/* --- Protocol detail bar --- */
+.stats-proto-bars {
+    background: var(--card-bg, #111827);
+    border: 1px solid var(--border, #1e293b);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stats-proto-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.stats-proto-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-secondary, #94a3b8);
+    width: 110px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.stats-proto-track {
+    flex: 1;
+    height: 8px;
+    background: var(--border, #1e293b);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.stats-proto-fill {
+    height: 100%;
+    background: #06b6d4;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+}
+
+.stats-proto-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #64748b;
+    width: 60px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .stats-panel { padding: 1rem; }
+    .stats-strip { grid-template-columns: 1fr 1fr; }
+    .stats-signal-nums { grid-template-columns: 1fr 1fr; }
+    .stats-row { grid-template-columns: 1fr; }
+    .stats-range-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+    .stats-panel { padding: 0.75rem; }
+    .stats-hero__number { font-size: 36px; }
+    .stats-strip { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stats-strip__card { padding: 12px; }
+    .stats-strip__value { font-size: 18px; }
+    .stats-range-card__miles { font-size: 22px; }
+}

@@ -12,13 +12,38 @@ import yaml
 from src.version import __version__
 
 
+# Band-start frequencies (MHz) for the Meshtastic slot formula
+# freq = freqStart + BW/2000 + (slot-1) * BW/1000
+# Values match _REGION_BAND_LIMITS_HZ in hal/concentrator_config.py.
+_REGION_FREQ_START: dict[str, float] = {
+    "US":     902.0,
+    "EU_868": 863.0,
+    "ANZ":    915.0,
+    "IN":     865.0,
+    "KR":     920.0,
+    "SG_923": 917.0,
+}
+
+# Regional default frequencies used when neither frequency_mhz nor slot
+# is set. Values match REGION_DEFAULTS in radio/presets.py.
+_REGION_DEFAULT_FREQ: dict[str, float] = {
+    "US":     906.875,
+    "EU_868": 869.525,
+    "ANZ":    916.0,
+    "IN":     865.4625,
+    "KR":     921.9,
+    "SG_923": 923.0,
+}
+
+
 @dataclass
 class RadioConfig:
     region: str = "US"
-    frequency_mhz: float = 906.875
+    frequency_mhz: Optional[float] = None  # resolved at load time; wins over slot
+    slot: Optional[int] = None             # Meshtastic 1-indexed slot; used when frequency_mhz absent
     spreading_factor: int = 11
     bandwidth_khz: float = 250.0
-    coding_rate: str = "4/8"
+    coding_rate: str = "4/5"
     sync_word: int = 0x2B
     preamble_length: int = 16
     tx_power_dbm: int = 22
@@ -27,6 +52,7 @@ class RadioConfig:
 @dataclass
 class MeshtasticConfig:
     default_key_b64: str = "AQ=="
+    primary_channel_name: str = "LongFast"
     channel_keys: dict[str, str] = field(default_factory=dict)
 
 
@@ -99,7 +125,7 @@ class UpstreamConfig:
 @dataclass
 class DeviceConfig:
     device_id: Optional[str] = None
-    device_name: str = "Mesh Point"
+    device_name: str = "Meshpoint"
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     altitude: Optional[float] = None
@@ -119,6 +145,59 @@ class RelayConfig:
 
 
 @dataclass
+class MqttConfig:
+    enabled: bool = False
+    broker: str = "mqtt.meshtastic.org"
+    port: int = 1883
+    username: str = "meshdev"
+    password: str = "large4cats"
+    topic_root: str = "msh"
+    region: str = "US"
+    publish_channels: list[str] = field(default_factory=lambda: ["LongFast", "MeshCore"])
+    publish_json: bool = False
+    location_precision: str = "exact"
+    homeassistant_discovery: bool = False
+
+
+@dataclass
+class NodeInfoConfig:
+    """Periodic NodeInfo broadcast settings.
+
+    Identity (long_name, short_name, hw_model) is broadcast on the
+    primary channel so receiving Meshtastic clients build a stable
+    contact entry.
+
+    Set ``interval_minutes`` to ``0`` to disable periodic broadcasts
+    while keeping TX enabled (DMs and replies still work). Otherwise
+    valid range is 5..1440 (5 min to 24 hr).
+    """
+
+    interval_minutes: int = 180
+    startup_delay_seconds: int = 60
+
+
+@dataclass
+class TransmitConfig:
+    """Native LoRa transmission settings.
+
+    When enabled, the Meshpoint can send Meshtastic messages through
+    the onboard SX1261 radio and MeshCore messages through the USB
+    companion. Disabled by default: opt-in via local.yaml.
+    """
+
+    enabled: bool = False
+    node_id: Optional[int] = None
+    tx_power_dbm: int = 14
+    # None = auto-derive from radio.region (10% US/ANZ/KR/SG_923,
+    # 1% EU_868/IN). Set explicitly in local.yaml to override.
+    max_duty_cycle_percent: Optional[float] = None
+    long_name: str = "Meshpoint"
+    short_name: str = "MPNT"
+    hop_limit: int = 3
+    nodeinfo: NodeInfoConfig = field(default_factory=NodeInfoConfig)
+
+
+@dataclass
 class AppConfig:
     radio: RadioConfig = field(default_factory=RadioConfig)
     meshtastic: MeshtasticConfig = field(default_factory=MeshtasticConfig)
@@ -129,6 +208,29 @@ class AppConfig:
     upstream: UpstreamConfig = field(default_factory=UpstreamConfig)
     device: DeviceConfig = field(default_factory=DeviceConfig)
     relay: RelayConfig = field(default_factory=RelayConfig)
+    mqtt: MqttConfig = field(default_factory=MqttConfig)
+    transmit: TransmitConfig = field(default_factory=TransmitConfig)
+
+
+def _resolve_radio_frequency(radio: "RadioConfig") -> None:
+    """Resolve radio.frequency_mhz at startup.
+
+    Priority (first match wins):
+    1. frequency_mhz set in YAML  -> use as-is, slot ignored
+    2. slot set in YAML           -> compute from slot + bandwidth + region
+    3. neither set                -> regional default frequency
+    """
+    if radio.frequency_mhz is not None:
+        return
+    if radio.slot is not None:
+        freq_start = _REGION_FREQ_START.get(radio.region)
+        if freq_start is not None:
+            spacing = radio.bandwidth_khz / 1000
+            radio.frequency_mhz = round(
+                freq_start + spacing / 2 + (radio.slot - 1) * spacing, 4
+            )
+            return
+    radio.frequency_mhz = _REGION_DEFAULT_FREQ.get(radio.region, 906.875)
 
 
 def _merge_dataclass(instance, overrides: dict):
@@ -163,6 +265,8 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "upstream": cfg.upstream,
         "device": cfg.device,
         "relay": cfg.relay,
+        "mqtt": cfg.mqtt,
+        "transmit": cfg.transmit,
     }
 
     for section_name, section_instance in section_map.items():
@@ -193,15 +297,54 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
 
     local = config_path or os.environ.get("CONCENTRATOR_CONFIG", "config/local.yaml")
     _apply_yaml(cfg, _validated_config_path(local))
+    _resolve_radio_frequency(cfg.radio)
 
     return cfg
+
+
+def _get_local_yaml_path() -> Path:
+    """Resolve the local.yaml path used for user overrides."""
+    raw = os.environ.get("CONCENTRATOR_CONFIG", "config/local.yaml")
+    return _validated_config_path(raw)
+
+
+def save_section_to_yaml(section: str, values: dict) -> None:
+    """Merge values into a section of local.yaml without destroying other sections.
+
+    Reads the existing file (if any), updates only the specified section,
+    and writes back. Creates the file if it doesn't exist.
+    """
+    path = _get_local_yaml_path()
+    existing: dict = {}
+    if path.exists():
+        with open(path, "r") as fh:
+            existing = yaml.safe_load(fh) or {}
+
+    if section not in existing:
+        existing[section] = {}
+    if isinstance(existing[section], dict):
+        existing[section].update(values)
+    else:
+        existing[section] = values
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(path, "w") as fh:
+            yaml.dump(existing, fh, default_flow_style=False, sort_keys=False)
+    except PermissionError:
+        import getpass
+        hint_user = getpass.getuser() or "meshpoint"
+        raise PermissionError(
+            f"Cannot write to {path}. "
+            f"Fix with: sudo chown {hint_user}:{hint_user} {path}"
+        )
 
 
 def validate_activation(config: AppConfig) -> None:
     """Require a valid signed API key before the concentrator pipeline starts."""
     token = config.upstream.auth_token
     if not token:
-        print("\n  Mesh Point is not activated.\n")
+        print("\n  Meshpoint is not activated.\n")
         print("  An API key is required to run the concentrator.")
         print("  Get a free key at https://meshradar.io\n")
         print("  Then run:  meshpoint setup\n")
@@ -211,7 +354,7 @@ def validate_activation(config: AppConfig) -> None:
 
     if not verify_license_key(token):
         print("\n  Invalid API key.\n")
-        print("  The key in your config is not a valid Mesh Radar license.")
+        print("  The key in your config is not a valid Meshradar license.")
         print("  Generate a new key at https://meshradar.io\n")
         print("  Then run:  meshpoint setup\n")
         sys.exit(1)
