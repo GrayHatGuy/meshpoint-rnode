@@ -55,6 +55,7 @@ class RnodeCaptureSource(CaptureSource):
         coding_rate:      int = 5,
         tx_power:         int = 22,
         auto_detect:      bool = True,
+        exclude_ports:    frozenset[str] = frozenset(),
     ) -> None:
         self._configured_port  = serial_port
         self._baud_rate        = baud_rate
@@ -64,6 +65,7 @@ class RnodeCaptureSource(CaptureSource):
         self._coding_rate      = coding_rate
         self._tx_power         = tx_power
         self._auto_detect      = auto_detect
+        self._exclude_ports    = exclude_ports
 
         self._driver = None          # RNodeDriver instance
         self._resolved_port: Optional[str] = None
@@ -345,4 +347,6 @@ class RnodeCaptureSource(CaptureSource):
             return None
 
         from src.capture.rnode_detect import detect_rnode_port
-        return await detect_rnode_port(baud=self._baud_rate)
+        return await detect_rnode_port(
+            exclude_ports=self._exclude_ports, baud=self._baud_rate
+        )
