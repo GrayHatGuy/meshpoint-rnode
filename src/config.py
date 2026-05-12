@@ -81,11 +81,11 @@ class RnodeUsbConfig:
 
     serial_port: Optional[str] = None
     baud_rate: int = 115200
-    frequency_hz: int = 915_000_000
+    frequency_hz: int = 914_875_000
     bandwidth_hz: int = 125_000
-    spreading_factor: int = 7
+    spreading_factor: int = 8
     coding_rate: int = 5
-    tx_power: int = 17          # required by RNode init; TX is never invoked
+    tx_power: int = 22          # required by RNode init; TX is never invoked
     auto_detect: bool = True
 
 

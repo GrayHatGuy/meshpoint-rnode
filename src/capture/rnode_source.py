@@ -49,11 +49,11 @@ class RnodeCaptureSource(CaptureSource):
         self,
         serial_port:      Optional[str] = None,
         baud_rate:        int = 115200,
-        frequency_hz:     int = 915_000_000,
+        frequency_hz:     int = 914_875_000,
         bandwidth_hz:     int = 125_000,
-        spreading_factor: int = 7,
+        spreading_factor: int = 8,
         coding_rate:      int = 5,
-        tx_power:         int = 17,
+        tx_power:         int = 22,
         auto_detect:      bool = True,
     ) -> None:
         self._configured_port  = serial_port
