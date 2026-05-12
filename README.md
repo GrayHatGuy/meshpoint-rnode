@@ -116,7 +116,7 @@ Remove the 2 screws on the back panel (the side without the Ethernet/antenna por
 
 ### Optional: MeshCore USB Companion
 
-Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://flasher.meshcore.co.uk/) to monitor MeshCore traffic alongside Meshtastic. Plug it into any USB port on the Pi -- the setup wizard auto-detects the device and configures its radio frequency for your region.
+Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://flasher.meshcore.co.uk/) to monitor MeshCore or RNode traffic alongside Meshtastic. Plug it into any USB port on the Pi -- the setup wizard auto-detects the device and configures its radio frequency for your region.
 
 > **Full step-by-step guide:** See the [Onboarding Guide](docs/ONBOARDING.md) for detailed instructions covering flashing, assembly, installation, MeshCore setup, and troubleshooting for all hardware options.
 
@@ -126,7 +126,7 @@ Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://f
 
 ```bash
 sudo apt update && sudo apt install -y git
-sudo git clone https://github.com/KMX415/meshpoint.git /opt/meshpoint
+sudo git clone https://github.com/GrayHatGuy/meshpoint.git /opt/meshpoint
 cd /opt/meshpoint && sudo bash scripts/install.sh
 ```
 
@@ -140,6 +140,34 @@ meshpoint status        # verify everything is running
 Open `http://<pi-ip>:8080` for the local dashboard.
 
 > **First time?** The [Onboarding Guide](docs/ONBOARDING.md) walks through everything from flashing the SD card to verifying your first captured packets.
+
+### RNode Options:
+
+To add RNode devices:
+*(disclaimer still in test mode and it does not send lxmf messages only captrures RX states from RNode [announces, msg, etc] - TX will be later...)* 
+*This code was LLM agent assitsted*
+
+Basic gist:
+- Program RNodefirmware.ino etc
+- Set parameters for RNode conf
+- Set meshpoint config to mirror params
+```
+capture:
+  rnode_usb:
+    frequency_hz: 915000000   # adjust for your region/network
+    bandwidth_hz: 125000
+    spreading_factor: 7
+    coding_rate: 5
+```
+- socket usb
+- enable autodetec config
+```
+auto_detect: true 
+```
+- reboot
+```
+meshpoint reboot
+```
 
 ---
 
@@ -159,7 +187,8 @@ Open `http://<pi-ip>:8080` for the local dashboard.
 └──────────┘    └──────────┘    │      ▲           │       │
                                 │      │       Dashboard   │
 ┌──────────┐    ┌──────────┐    │   Messages    (port 8080)│
-│ MeshCore │    │  Heltec  │    │   + Chat UI              │
+│ MeshCore |    | Heltec MC |
+ │ or Rnode │   | or Rnode  │    │   + Chat UI              │
 │ packets  │◀──▶│  USB     │◀──▶│                          │
 │ (OTA)    │    │companion │    │                          │
 └──────────┘    └──────────┘    └─────────────────────────┘
@@ -243,7 +272,7 @@ Start with the doc that matches what you are trying to do.
 
 **Setup and configuration**
 - **[Onboarding Guide](docs/ONBOARDING.md):** step-by-step from empty Pi to running Meshpoint
-- **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs DIY, MeshCore companion radios, antennas, what's not supported
+- **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs DIY, MeshCore companion or RNode radios, antennas, what's not supported
 - **[Configuration Guide](docs/CONFIGURATION.md):** all config options, private channels, relay, upstream, MQTT, radio tuning
 - **[Radio Config Explained](docs/RADIO-CONFIG-EXPLAINED.md):** the "why" behind region, spreading factor, bandwidth, custom slots, Part 15 awareness
 - **[MQTT and Meshradar](docs/MQTT-AND-MESHRADAR.md):** the two cloud paths side-by-side, what data flows where, privacy posture
