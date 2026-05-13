@@ -190,9 +190,14 @@ class PipelineCoordinator:
 
         packet.capture_source = raw.capture_source
         await self._store_packet(packet)
-        await self._relay.process_packet(packet)
-        self._publish_mqtt(packet)
-        self._record_stats(packet)
+        try:
+            await self._relay.process_packet(packet)
+            self._publish_mqtt(packet)
+            self._record_stats(packet)
+        except Exception:
+            logger.exception(
+                "Pipeline post-store error for packet %s", packet.packet_id
+            )
         self._notify_callbacks(packet)
 
     @staticmethod

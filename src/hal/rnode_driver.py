@@ -46,8 +46,11 @@ CMD_BOARD_INFO  = 0x47
 RADIO_STATE_ON  = 0x01
 RADIO_STATE_OFF = 0x00
 
-# RNode encodes RSSI as (dBm + 292); SNR as (dBm * 4 + 128)
-_RSSI_OFFSET = 292
+# RNode encodes RSSI as (dBm + offset); offset depends on chip family:
+#   SX127x HF port (>525 MHz, e.g. 915 MHz): offset = 157
+#   SX126x (newer boards):                   offset = 292
+# SNR encoded as signed byte * 0.25 dB
+_RSSI_OFFSET = 157   # SX127x HF port (Heltec, T-Beam, RAK, etc.)
 _SNR_SCALE   = 4
 _SNR_OFFSET  = 128
 
