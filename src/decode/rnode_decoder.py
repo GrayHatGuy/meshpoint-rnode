@@ -26,6 +26,11 @@ Flags byte bitmasks:
   bit 4     : transport_type
   bits 3-2  : destination_type
   bits 1-0  : packet_type
+
+_PTYPE_DATA         = 0x00
+_PTYPE_ANNOUNCE     = 0x01
+_PTYPE_LINK_REQUEST = 0x02
+_PTYPE_PROOF        = 0x03  
 """
 
 from __future__ import annotations
