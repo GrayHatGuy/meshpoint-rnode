@@ -77,6 +77,15 @@ class RnodeUsbConfig:
 
     Radio parameters must match the target Reticulum network.  Defaults
     are for the US 915 MHz ISM band with conservative LoRa settings.
+
+    ``sync_word`` records the network's expected sync word (Reticulum
+    default 0x42). On the USB RNode path it is informational only --
+    the dongle's onboard radio does the sync filtering before bytes
+    reach the host. The standard RNode firmware does not expose a
+    KISS command to change it; use ``rnodeconf`` to flash a matching
+    value if your network differs. The same field will drive the
+    SX1302 per-channel sync word filter once the Step 2 HAL patch
+    enables Reticulum capture directly on the concentrator.
     """
 
     serial_port: Optional[str] = None
@@ -86,6 +95,7 @@ class RnodeUsbConfig:
     spreading_factor: int = 8
     coding_rate: int = 5
     tx_power: int = 22          # required by RNode init; TX is never invoked
+    sync_word: int = 0x42       # Reticulum network sync word; see docstring
     auto_detect: bool = True
 
 

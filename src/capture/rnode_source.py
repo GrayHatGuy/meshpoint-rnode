@@ -54,6 +54,7 @@ class RnodeCaptureSource(CaptureSource):
         spreading_factor: int = 8,
         coding_rate:      int = 5,
         tx_power:         int = 22,
+        sync_word:        int = 0x42,
         auto_detect:      bool = True,
         exclude_ports:    frozenset[str] = frozenset(),
     ) -> None:
@@ -64,6 +65,7 @@ class RnodeCaptureSource(CaptureSource):
         self._spreading_factor = spreading_factor
         self._coding_rate      = coding_rate
         self._tx_power         = tx_power
+        self._sync_word        = sync_word
         self._auto_detect      = auto_detect
         self._exclude_ports    = exclude_ports
 
@@ -163,14 +165,16 @@ class RnodeCaptureSource(CaptureSource):
                 spreading_factor=self._spreading_factor,
                 coding_rate=self._coding_rate,
                 tx_power=self._tx_power,
+                expected_sync_word=self._sync_word,
             )
             self._connected = True
             logger.info(
                 "RNode USB source started on %s @ %d baud  "
-                "(%d Hz  BW=%d  SF=%d  CR=4/%d)",
+                "(%d Hz  BW=%d  SF=%d  CR=4/%d  expected_sync=0x%02X)",
                 port, self._baud_rate,
                 self._frequency_hz, self._bandwidth_hz,
                 self._spreading_factor, self._coding_rate,
+                self._sync_word,
             )
         except Exception:
             logger.exception("Failed to open RNode USB on %s", port)

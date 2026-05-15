@@ -252,6 +252,7 @@ def _add_rnode_usb_source(
                 spreading_factor=rnode_cfg.spreading_factor,
                 coding_rate=rnode_cfg.coding_rate,
                 tx_power=rnode_cfg.tx_power,
+                sync_word=rnode_cfg.sync_word,
                 auto_detect=rnode_cfg.auto_detect,
                 exclude_ports=exclude_ports,
             )

@@ -29,6 +29,7 @@ TFESC = 0xDD  # escaped FESC
 
 # ---------------------------------------------------------------------------
 # RNode command bytes
+# Source: markqvist/RNode_Firmware/Framing.h
 # ---------------------------------------------------------------------------
 CMD_DATA        = 0x00
 CMD_FREQUENCY   = 0x01
@@ -38,10 +39,26 @@ CMD_SF          = 0x04
 CMD_CR          = 0x05
 CMD_RADIO_STATE = 0x06
 CMD_DETECT      = 0x08
-CMD_PROMISC     = 0x11
+CMD_PROMISC     = 0x0E   # was 0x11 (silently ignored by firmware as CMD_UNKNOWN)
 CMD_STAT_RSSI   = 0x23
 CMD_STAT_SNR    = 0x24
 CMD_BOARD_INFO  = 0x47
+
+# NOTE on sync word:
+#   The RNode dongle's onboard ESP32 + radio (SX1276/SX1262) do hardware
+#   sync word filtering before any byte reaches us over USB serial. By
+#   the time KISS frames arrive on the host, they are already known-good
+#   Reticulum frames matching the firmware-configured sync word.
+#
+#   The host therefore CANNOT change the sync word at runtime -- the
+#   standard RNode firmware exposes no KISS command for it (verified
+#   against markqvist/RNode_Firmware/Framing.h). To change the sync word
+#   on the dongle, flash matching firmware via rnodeconf.
+#
+#   The ``expected_sync_word`` parameter to ``configure()`` is purely
+#   informational: we log it so operators can confirm the network value,
+#   and the same config field will drive the SX1302 per-channel sync
+#   filter once the Step 2 HAL patch lands.
 
 RADIO_STATE_ON  = 0x01
 RADIO_STATE_OFF = 0x00
@@ -128,12 +145,21 @@ class RNodeDriver:
         spreading_factor: int,
         coding_rate:     int,
         tx_power:        int,
+        expected_sync_word: int = 0x42,
     ) -> None:
         """Send radio configuration and enable the receiver.
 
         Must be called after ``open()``.  The radio will not forward
         packets until all parameters have been accepted and the radio
         state is set to ON.
+
+        ``expected_sync_word`` is informational on the USB path: the
+        RNode dongle filters at the radio before the host sees frames,
+        so this value just documents what the operator believes the
+        network is using. It cannot be enforced via KISS -- use
+        ``rnodeconf`` to change the dongle's actual sync word. If
+        capture shows zero traffic, the firmware-set sync word does
+        not match the network sync word.
         """
         self._send_cmd(CMD_FREQUENCY,   struct.pack(">I", frequency_hz))
         self._send_cmd(CMD_BANDWIDTH,   struct.pack(">I", bandwidth_hz))
@@ -144,8 +170,10 @@ class RNodeDriver:
         self._send_cmd(CMD_PROMISC,     bytes([0x01]))
         logger.info(
             "RNode configured: %d Hz  BW=%d Hz  SF=%d  CR=4/%d  "
-            "TXP=%d dBm  promisc=on",
-            frequency_hz, bandwidth_hz, spreading_factor, coding_rate, tx_power,
+            "TXP=%d dBm  promisc=on  sync_word=0x%02X "
+            "(filtered by dongle firmware; informational here)",
+            frequency_hz, bandwidth_hz, spreading_factor, coding_rate,
+            tx_power, expected_sync_word,
         )
 
     # ------------------------------------------------------------------

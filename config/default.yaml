@@ -29,13 +29,15 @@ capture:
   serial_port: null
   serial_baud: 115200
   concentrator_spi_device: "/dev/spidev0.0"
-  # When true, the SX1302 channel plan is replaced with a multi-protocol
-  # layout (Meshtastic + Reticulum + MeshCore on different IF chains).
-  # Each received packet is routed to the matching decoder based on
-  # which channel it came in on. Currently US 915 MHz only.
-  # NOTE: hardware sync word filtering is global until the per-channel
-  # sync word HAL patch lands -- the radio.sync_word setting still
-  # determines which protocol is actually demodulated.
+  # When true, the SX1302 channel plan is replaced with a dual-protocol
+  # layout: Meshtastic on the single-SF channel + radio_0, MeshCore on
+  # multi-SF channels + radio_1. Both protocols use sync word 0x2B so
+  # the global sync filter passes both. Each received packet is routed
+  # to the matching decoder based on which IF channel captured it.
+  # Currently US 915 MHz only.
+  # Reticulum continues to be captured by the USB RNode (independent
+  # radio at sync word 0x12). Triple-protocol on one concentrator
+  # requires the Step 2 per-channel sync word HAL patch.
   concentrator_multi_protocol: false
   meshcore_usb:
     serial_port: null
@@ -49,6 +51,12 @@ capture:
     spreading_factor: 8
     coding_rate: 5
     tx_power: 22            # required for RNode init; TX is never invoked
+    sync_word: 0x42         # Reticulum network sync word. Informational on
+                            # this USB path -- the dongle's onboard radio
+                            # filters at the hardware level before frames
+                            # reach the host. Use rnodeconf to set/verify
+                            # the dongle. Same field will drive the SX1302
+                            # per-channel filter once Step 2 patch lands.
     auto_detect: true
 
 storage:
