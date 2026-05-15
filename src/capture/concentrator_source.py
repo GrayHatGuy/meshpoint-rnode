@@ -108,20 +108,47 @@ class ConcentratorCaptureSource(CaptureSource):
         self._wrapper.reset()
         self._wrapper.configure(self._channel_plan)
         self._wrapper.start()
-        self._wrapper.set_syncword(self._syncword)
+        self._apply_sync_word_strategy()
         self._running = True
         if self._multi_protocol:
             tagged = self._summarize_protocol_tags()
             logger.info(
                 "Concentrator capture started in multi-protocol mode "
-                "(syncword=0x%02X, channels=%s)",
-                self._syncword, tagged,
+                "(channels=%s)",
+                tagged,
             )
         else:
             logger.info(
                 "Concentrator capture started (syncword=0x%02X)",
                 self._syncword,
             )
+
+    def _apply_sync_word_strategy(self) -> None:
+        """Pick the right sync-word HAL call based on what the plan provides.
+
+        Two cases:
+          1. Plan supplies both ``multi_sf_sync_word`` and
+             ``single_sf_sync_word`` AND the Step 2 HAL patch is
+             installed: call ``set_syncword_pair`` so the multi-SF and
+             single-SF demods filter different protocols simultaneously.
+          2. Otherwise: legacy single-sync codepath via
+             ``set_syncword(self._syncword)``.
+        """
+        plan = self._channel_plan
+        multi = plan.multi_sf_sync_word
+        single = plan.single_sf_sync_word
+
+        if multi is not None and single is not None:
+            ok = self._wrapper.set_syncword_pair(multi, single)
+            if ok:
+                return
+            logger.warning(
+                "Pair-sync requested (multi=0x%02X single=0x%02X) but HAL "
+                "lacks Step 2 patch; falling back to single sync 0x%02X",
+                multi, single, self._syncword,
+            )
+
+        self._wrapper.set_syncword(self._syncword)
 
     def _summarize_protocol_tags(self) -> str:
         """One-line summary of which channels carry which protocol."""

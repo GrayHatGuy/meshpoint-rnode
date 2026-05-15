@@ -245,7 +245,12 @@ class SX1302Wrapper:
         return self._crc_bad_count
 
     def set_syncword(self, syncword: int) -> None:
-        """Configure custom sync word (requires patched HAL)."""
+        """Configure custom sync word (requires patched HAL).
+
+        Applies one sync word to ALL demods (multi-SF + single-SF).
+        For independent multi-SF / single-SF sync words use
+        :meth:`set_syncword_pair` instead (requires Step 2 HAL patch).
+        """
         if self._lib is None:
             self.load()
         result = self._lib.sx1302_lora_syncword(False, syncword)
@@ -253,6 +258,67 @@ class SX1302Wrapper:
             logger.warning("Failed to set sync word 0x%02X", syncword)
         else:
             logger.info("Sync word set to 0x%02X", syncword)
+
+    def set_syncword_pair(
+        self, multi_sf_syncword: int, single_sf_syncword: int,
+    ) -> bool:
+        """Configure independent sync words for multi-SF and single-SF demods.
+
+        Requires the Step 2 HAL patch (``sx1302_lora_syncword_pair``).
+        Returns True on success, False if the symbol is missing (older
+        HAL build) so the caller can fall back to :meth:`set_syncword`.
+
+        Single SX1302 hardware supports at most 2 distinct sync words:
+        one for the multi-SF demod group, one for the single-SF demod.
+        """
+        if self._lib is None:
+            self.load()
+        if not hasattr(self._lib, "sx1302_lora_syncword_pair"):
+            logger.warning(
+                "set_syncword_pair: HAL symbol missing -- rebuild "
+                "libloragw with patch_hal.sh to enable Step 2"
+            )
+            return False
+        result = self._lib.sx1302_lora_syncword_pair(
+            multi_sf_syncword, single_sf_syncword,
+        )
+        if result != LGW_HAL_SUCCESS:
+            logger.warning(
+                "Failed to set sync word pair multi=0x%02X single=0x%02X",
+                multi_sf_syncword, single_sf_syncword,
+            )
+            return False
+        logger.info(
+            "Sync word pair set: multi-SF=0x%02X  single-SF=0x%02X",
+            multi_sf_syncword, single_sf_syncword,
+        )
+        return True
+
+    def set_tx_syncword(self, syncword: int) -> bool:
+        """Override the sync word for the next TX packet.
+
+        Updates the sx1302_tx_sw_peak1/2 globals that the patched TX
+        path reads from. Call immediately before :meth:`send` if the
+        outbound packet's protocol uses a different sync word than
+        whatever the radio is configured for at RX time.
+
+        Requires the Step 2 HAL patch. Returns True on success,
+        False if the symbol is missing.
+        """
+        if self._lib is None:
+            self.load()
+        if not hasattr(self._lib, "sx1302_set_tx_syncword"):
+            logger.warning(
+                "set_tx_syncword: HAL symbol missing -- rebuild "
+                "libloragw with patch_hal.sh to enable Step 2"
+            )
+            return False
+        result = self._lib.sx1302_set_tx_syncword(syncword)
+        if result != LGW_HAL_SUCCESS:
+            logger.warning("Failed to override TX sync word 0x%02X", syncword)
+            return False
+        logger.debug("Next TX sync word set to 0x%02X", syncword)
+        return True
 
     # ── TX operations ───────────────────────────────────────────────
 
@@ -422,6 +488,18 @@ class SX1302Wrapper:
             ctypes.c_bool,
             ctypes.c_uint8,
         ]
+
+        # Step 2 patch symbols -- bind only if present so older HAL
+        # builds without the patch still load cleanly.
+        if hasattr(lib, "sx1302_lora_syncword_pair"):
+            lib.sx1302_lora_syncword_pair.restype = ctypes.c_int
+            lib.sx1302_lora_syncword_pair.argtypes = [
+                ctypes.c_uint8,
+                ctypes.c_uint8,
+            ]
+        if hasattr(lib, "sx1302_set_tx_syncword"):
+            lib.sx1302_set_tx_syncword.restype = ctypes.c_int
+            lib.sx1302_set_tx_syncword.argtypes = [ctypes.c_uint8]
 
         lib.lgw_txgain_setconf.restype = ctypes.c_int
         lib.lgw_txgain_setconf.argtypes = [

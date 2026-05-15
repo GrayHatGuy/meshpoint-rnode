@@ -57,12 +57,31 @@ class ChannelConfig:
 
 @dataclass
 class ConcentratorChannelPlan:
-    """Full channel configuration for the SX1302 concentrator."""
+    """Full channel configuration for the SX1302 concentrator.
+
+    Sync word fields:
+
+    - ``multi_sf_sync_word`` and ``single_sf_sync_word`` may be set
+      independently to different values when the Step 2 HAL patch is
+      installed (``sx1302_lora_syncword_pair``). The multi-SF value
+      filters the SF5/SF6/SF7-SF12 demod groups uniformly; the
+      single-SF value filters the LoRa Service modem only.
+
+    - When both are ``None`` the legacy single-sync codepath is used
+      (the ``syncword`` arg passed to ConcentratorCaptureSource).
+
+    - This is the hardware-level constraint: the SX1302 cannot do
+      per-channel sync word, only per-demod-group. Two protocols can
+      coexist (one on multi-SF, one on single-SF); a third would need
+      a separate radio.
+    """
 
     multi_sf_channels: list[ChannelConfig] = field(default_factory=list)
     single_sf_channel: ChannelConfig | None = None
     radio_0_freq_hz: int = 906_800_000
     radio_1_freq_hz: int = 907_400_000
+    multi_sf_sync_word: Optional[int] = None
+    single_sf_sync_word: Optional[int] = None
 
     @classmethod
     def from_radio_config(
@@ -157,46 +176,52 @@ class ConcentratorChannelPlan:
         meshtastic_freq_hz: int = 906_875_000,
         meshtastic_sf: int = 11,
         meshtastic_bw_khz: int = 250,
-        meshcore_freq_hz: int = 910_525_000,
-        meshcore_bw_khz: int = 125,
+        reticulum_freq_hz: int = 914_875_000,
+        meshtastic_sync_word: int = 0x2B,
+        reticulum_sync_word: int = 0x42,
     ) -> ConcentratorChannelPlan:
-        """Dual-protocol monitoring on US 915 MHz band (Meshtastic + MeshCore).
+        """Dual-protocol monitoring on US 915 MHz: Meshtastic + Reticulum.
 
-        Channel allocation:
+        ── Hardware reality check ──────────────────────────────────────
+        The SX1302 has 2 sync-word filter slots: one for the multi-SF
+        demod group (SF5/SF6/SF7-SF12, all 8 modems share it) and one
+        for the single-SF (LoRa Service) demod. So at most 2 protocols
+        can coexist on one concentrator at different sync words.
 
-          single-SF       Meshtastic LongFast (250 kHz, SF11)
-          multi-SF[0-3]   MeshCore               (125 kHz, all SF)
-          multi-SF[4-6]   Meshtastic monitoring  (125 kHz, all SF)
+        ── Channel allocation (Config A: MT + RNS) ─────────────────────
+          single-SF       Meshtastic LongFast (250 kHz, SF11) sync 0x2B
+          multi-SF[0]     Reticulum            (125 kHz, all SF) sync 0x42
+          multi-SF[1-6]   Meshtastic monitoring (125 kHz, sync 0x2B*)
           multi-SF[7]     spare (disabled)
 
-        Architecture:
+          *NOTE: the multi-SF sync filter is set to 0x42 for Reticulum,
+          which means the multi-SF MT monitoring channels will only
+          pick up Meshtastic frames whose preamble happens to coincide
+          with Reticulum sync. In practice you will see ~zero MT on the
+          multi-SF channels; full MT capture happens on the single-SF
+          channel where the MT sync 0x2B is filtered properly. The
+          extra multi-SF MT channels are kept disabled-in-practice
+          slots for future use rather than being hard-disabled, so
+          power users who reverse the sync assignment can flip them on.
+
+        ── Architecture ────────────────────────────────────────────────
           radio_0 = meshtastic_freq_hz (~906.875 MHz)
-          radio_1 = meshcore_freq_hz   (~910.525 MHz)
+          radio_1 = reticulum_freq_hz  (~914.875 MHz)
+          MeshCore stays on its USB companion (its sync word 0x12
+          would need a third filter slot the SX1302 doesn't have).
 
-        Sync word:
-          Both Meshtastic and MeshCore use LoRa sync word 0x2B, so
-          the SX1302's single global sync word filter (currently
-          0x2B by default) lets both protocols' frames through.
-          No HAL patch required for this dual-protocol setup --
-          unlike RNS-on-concentrator which uses sync 0x12.
-
-        Reticulum continues to be captured via the USB RNode (its
-        own radio with sync word 0x12). To capture all three
-        protocols on one concentrator, Step 2's per-channel sync
-        word HAL patch is required.
-
-        MeshCore bandwidth note:
-          The single-SF channel is reserved for Meshtastic LongFast
-          (250 kHz). MeshCore monitors use multi-SF channels, which
-          are 125 kHz BW only. If your MeshCore radios run at 250
-          kHz BW (the MeshCore default), only the lower 125 kHz of
-          each signal is demodulated and some packets will be lost.
-          For full MC capture on the concentrator, configure your
-          MeshCore radios at 125 kHz BW.
+        ── Step 2 HAL patch required ───────────────────────────────────
+        This plan requires the patched libloragw built by
+        scripts/patch_hal.sh which exposes sx1302_lora_syncword_pair().
+        Without that patch, the multi_sf/single_sf sync word fields are
+        silently ignored and the wrapper falls back to the global sync
+        word setting.
         """
         plan = ConcentratorChannelPlan(
-            radio_0_freq_hz=meshtastic_freq_hz,   # ~906.875 (MT)
-            radio_1_freq_hz=meshcore_freq_hz,     # ~910.525 (MC)
+            radio_0_freq_hz=meshtastic_freq_hz,    # ~906.875 (MT)
+            radio_1_freq_hz=reticulum_freq_hz,     # ~914.875 (RNS)
+            multi_sf_sync_word=reticulum_sync_word,    # 0x42 -> RNS
+            single_sf_sync_word=meshtastic_sync_word,  # 0x2B -> MT
         )
 
         plan.single_sf_channel = ChannelConfig(
@@ -206,14 +231,16 @@ class ConcentratorChannelPlan:
             protocol=Protocol.MESHTASTIC,
         )
 
-        # multi-SF[0-3]: MeshCore monitoring near MC freq (radio_1)
-        for offset in (-300_000, -100_000, 100_000, 300_000):
-            plan.multi_sf_channels.append(ChannelConfig(
-                frequency_hz=meshcore_freq_hz + offset,
-                protocol=Protocol.MESHCORE,
-            ))
-        # multi-SF[4-6]: Meshtastic monitoring near LongFast freq (radio_0)
-        for offset in (-200_000, 200_000, 400_000):
+        # multi-SF[0]: Reticulum on radio_1 (sync 0x42 from plan)
+        plan.multi_sf_channels.append(ChannelConfig(
+            frequency_hz=reticulum_freq_hz,
+            protocol=Protocol.RETICULUM,
+        ))
+        # multi-SF[1-6]: Meshtastic monitoring near MT freq (radio_0)
+        # Note: these will only match if MT happens to use sync 0x42 too,
+        # which it doesn't. Kept enabled as observation slots; the hardware
+        # cost of having them enabled is negligible and they document intent.
+        for offset in (-400_000, -200_000, -100_000, 100_000, 200_000, 400_000):
             plan.multi_sf_channels.append(ChannelConfig(
                 frequency_hz=meshtastic_freq_hz + offset,
                 protocol=Protocol.MESHTASTIC,

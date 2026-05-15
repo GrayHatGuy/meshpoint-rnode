@@ -397,7 +397,10 @@ def _inject_tx_gain_into_source(coord: PipelineCoordinator) -> None:
             len(RAK2287_TX_GAIN_LUT),
         )
         conc_source._wrapper.start()
-        conc_source._wrapper.set_syncword(conc_source._syncword)
+        # Defer to the source's own sync-word strategy (handles pair-sync
+        # for Step 2 multi-protocol mode, falls back to single-sync for
+        # legacy single-protocol mode).
+        conc_source._apply_sync_word_strategy()
         conc_source._running = True
         logger.info(
             "Concentrator started with TX gain (syncword=0x%02X)",
