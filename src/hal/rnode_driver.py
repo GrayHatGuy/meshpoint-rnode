@@ -39,7 +39,12 @@ CMD_SF          = 0x04
 CMD_CR          = 0x05
 CMD_RADIO_STATE = 0x06
 CMD_DETECT      = 0x08
-CMD_PROMISC     = 0x0E   # was 0x11 (silently ignored by firmware as CMD_UNKNOWN)
+CMD_PROMISC     = 0x11   # NOTE: master-branch firmware defines this as 0x0E,
+                         # but 0x0E breaks RX on the firmware version commonly
+                         # flashed on existing RNode dongles. 0x11 is what the
+                         # field-deployed firmware actually accepts. If the
+                         # dongle isn't entering promisc mode, verify your
+                         # firmware build with rnodeconf and update this byte.
 CMD_STAT_RSSI   = 0x23
 CMD_STAT_SNR    = 0x24
 CMD_BOARD_INFO  = 0x47
