@@ -158,22 +158,27 @@ class ConcentratorChannelPlan:
         meshtastic_sf: int = 11,
         meshtastic_bw_khz: int = 250,
         reticulum_freq_hz: int = 914_875_000,
-        meshcore_freq_hz: int = 910_525_000,
+        meshcore_freq_hz: Optional[int] = None,
     ) -> ConcentratorChannelPlan:
-        """Triple-protocol monitoring on US 915 MHz band.
+        """Dual-protocol monitoring on US 915 MHz band (MT + RNS).
 
-        Channel allocation (8 of 9 demodulators used, 1 spare):
+        Channel allocation:
 
           single-SF       Meshtastic LongFast (250 kHz, SF11)
           multi-SF[0]     Reticulum            (125 kHz, all SF)
-          multi-SF[1-2]   MeshCore             (125 kHz, all SF)
-          multi-SF[3-6]   Meshtastic monitoring channels
-          multi-SF[7]     spare (disabled)
+          multi-SF[1-6]   Meshtastic monitoring channels
+          multi-SF[7]     MeshCore (only if meshcore_freq_hz given AND
+                          within +/-900 kHz of MT freq)
 
-        radio_0 covers ~906-911 MHz (Meshtastic + MeshCore band).
-        radio_1 covers ~914-915 MHz (Reticulum band) — the 8 MHz
-        spread between MT and RNS exceeds a single RF chain's IF
-        range, so both SX1250 radios are used.
+        Hardware constraint:
+          The SX1302 has 2 RF chains, each with ~+/-900 kHz of usable
+          IF range from the radio center. Meshtastic (906.875) and
+          Reticulum (914.875) are 8 MHz apart -- they fit on the two
+          separate RF chains. A third frequency (e.g. MeshCore at
+          910.525) cannot fit because it falls in the dead zone
+          between both RF chains. MeshCore stays on the USB companion
+          for now; in a future revision it can be added here if the
+          user retunes their MeshCore radios near 906.875 or 914.875.
 
         Sync word constraint:
           The SX1302 HAL filters one sync word globally. Until the
@@ -181,12 +186,12 @@ class ConcentratorChannelPlan:
           protocol's frames pass the demodulator's sync detector
           at a time. Set ``radio.sync_word`` in local.yaml to
           choose which protocol's sync word is honored:
-            0x2B  -> Meshtastic + MeshCore captured (Reticulum drops)
-            0x12  -> Reticulum captured (MT + MC drop)
+            0x2B  -> Meshtastic captured (Reticulum drops)
+            0x12  -> Reticulum captured (Meshtastic drops)
         """
         plan = ConcentratorChannelPlan(
-            radio_0_freq_hz=908_500_000,   # center between MT and MC
-            radio_1_freq_hz=reticulum_freq_hz,
+            radio_0_freq_hz=meshtastic_freq_hz,    # ~906.875 (MT)
+            radio_1_freq_hz=reticulum_freq_hz,     # ~914.875 (RNS)
         )
 
         plan.single_sf_channel = ChannelConfig(
@@ -201,27 +206,38 @@ class ConcentratorChannelPlan:
             frequency_hz=reticulum_freq_hz,
             protocol=Protocol.RETICULUM,
         ))
-        # multi-SF[1-2]: MeshCore (two slots for redundancy)
-        plan.multi_sf_channels.append(ChannelConfig(
-            frequency_hz=meshcore_freq_hz,
-            protocol=Protocol.MESHCORE,
-        ))
-        plan.multi_sf_channels.append(ChannelConfig(
-            frequency_hz=meshcore_freq_hz,
-            protocol=Protocol.MESHCORE,
-        ))
-        # multi-SF[3-6]: Meshtastic monitoring near LongFast freq
-        for offset in (-300_000, -100_000, 100_000, 300_000):
+        # multi-SF[1-6]: Meshtastic monitoring near LongFast freq
+        # (all within radio_0 IF window)
+        for offset in (-400_000, -200_000, -100_000, 100_000, 200_000, 400_000):
             plan.multi_sf_channels.append(ChannelConfig(
                 frequency_hz=meshtastic_freq_hz + offset,
                 protocol=Protocol.MESHTASTIC,
             ))
-        # multi-SF[7]: spare
-        plan.multi_sf_channels.append(ChannelConfig(
-            frequency_hz=meshtastic_freq_hz,
-            enabled=False,
-            protocol=None,
-        ))
+        # multi-SF[7]: optional MeshCore slot, only if in range
+        if meshcore_freq_hz is not None:
+            mc_offset_mt = abs(meshcore_freq_hz - meshtastic_freq_hz)
+            mc_offset_rns = abs(meshcore_freq_hz - reticulum_freq_hz)
+            if min(mc_offset_mt, mc_offset_rns) <= 900_000:
+                plan.multi_sf_channels.append(ChannelConfig(
+                    frequency_hz=meshcore_freq_hz,
+                    protocol=Protocol.MESHCORE,
+                ))
+            else:
+                logger.warning(
+                    "MeshCore freq %.3f MHz is out of IF range from both "
+                    "MT (%.3f) and RNS (%.3f) RF chains; leaving MeshCore "
+                    "on USB companion.",
+                    meshcore_freq_hz / 1e6,
+                    meshtastic_freq_hz / 1e6,
+                    reticulum_freq_hz / 1e6,
+                )
+                plan.multi_sf_channels.append(ChannelConfig(
+                    frequency_hz=meshtastic_freq_hz, enabled=False,
+                ))
+        else:
+            plan.multi_sf_channels.append(ChannelConfig(
+                frequency_hz=meshtastic_freq_hz, enabled=False,
+            ))
         return plan
 
     def protocol_for_if_chain(self, if_chain: int) -> Optional[Protocol]:
