@@ -36,6 +36,7 @@ def _add_concentrator_source(coordinator: PipelineCoordinator, config) -> None:
                 spi_path=config.capture.concentrator_spi_device,
                 syncword=config.radio.sync_word,
                 radio_config=config.radio,
+                multi_protocol=config.capture.concentrator_multi_protocol,
             )
         )
     except Exception:

@@ -6,6 +6,7 @@ from typing import Optional
 from src.decode.crypto_service import CryptoService
 from src.decode.meshtastic_decoder import MeshtasticDecoder
 from src.decode.meshcore_decoder import MeshcoreDecoder
+from src.decode.rnode_decoder import RnodeDecoder
 from src.models.packet import Packet, Protocol
 from src.models.signal import SignalMetrics
 
@@ -26,6 +27,7 @@ class PacketRouter:
     def __init__(self, crypto: CryptoService):
         self._meshtastic = MeshtasticDecoder(crypto)
         self._meshcore = MeshcoreDecoder(crypto)
+        self._rnode = RnodeDecoder()
 
     @property
     def meshtastic_decoder(self) -> MeshtasticDecoder:
@@ -34,6 +36,10 @@ class PacketRouter:
     @property
     def meshcore_decoder(self) -> MeshcoreDecoder:
         return self._meshcore
+
+    @property
+    def rnode_decoder(self) -> RnodeDecoder:
+        return self._rnode
 
     def decode(
         self,
@@ -56,6 +62,17 @@ class PacketRouter:
                 logger.info(
                     "Meshcore packet (hint) type=%s src=%s decrypted=%s",
                     packet.packet_type.value, packet.source_id, packet.decrypted,
+                )
+            return packet
+
+        if protocol_hint == Protocol.RETICULUM:
+            packet = self._rnode.decode(raw_bytes, signal=signal)
+            if packet:
+                logger.info(
+                    "Reticulum packet (hint) type=%s dest=%s hops=%d",
+                    packet.packet_type.value,
+                    packet.destination_id,
+                    packet.hop_limit,
                 )
             return packet
 

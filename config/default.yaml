@@ -29,6 +29,14 @@ capture:
   serial_port: null
   serial_baud: 115200
   concentrator_spi_device: "/dev/spidev0.0"
+  # When true, the SX1302 channel plan is replaced with a multi-protocol
+  # layout (Meshtastic + Reticulum + MeshCore on different IF chains).
+  # Each received packet is routed to the matching decoder based on
+  # which channel it came in on. Currently US 915 MHz only.
+  # NOTE: hardware sync word filtering is global until the per-channel
+  # sync word HAL patch lands -- the radio.sync_word setting still
+  # determines which protocol is actually demodulated.
+  concentrator_multi_protocol: false
   meshcore_usb:
     serial_port: null
     baud_rate: 115200

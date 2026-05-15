@@ -72,6 +72,7 @@ class ConcentratorPacket:
     coderate: int
     crc_ok: bool
     timestamp_us: int
+    if_chain: int = 0    # which demodulator captured this packet (0..7 = multi-SF, 8 = single-SF)
 
 
 class SX1302Wrapper:
@@ -228,6 +229,7 @@ class SX1302Wrapper:
                     coderate=pkt.coderate,
                     crc_ok=(pkt.status == STAT_CRC_OK),
                     timestamp_us=pkt.count_us,
+                    if_chain=pkt.if_chain,
                 )
             )
 

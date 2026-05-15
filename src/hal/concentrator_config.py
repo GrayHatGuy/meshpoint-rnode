@@ -15,8 +15,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import Optional
+
+from src.models.packet import Protocol
 
 logger = logging.getLogger(__name__)
+
+# Concentrator IF chain index used for the single-SF demodulator
+# (the 8 multi-SF demods occupy if_chain 0..7).
+_SINGLE_SF_IF_CHAIN = 8
 
 _REGION_DEFAULTS_HZ: dict[str, int] = {
     "US": 906_875_000,
@@ -45,6 +52,7 @@ class ChannelConfig:
     bandwidth_khz: int = 125
     spreading_factor: int = 0
     enabled: bool = True
+    protocol: Optional[Protocol] = None  # tags packets received on this if_chain
 
 
 @dataclass
@@ -143,6 +151,98 @@ class ConcentratorChannelPlan:
             radio_1_freq_hz=907_400_000,
             multi_sf_base_hz=906_200_000,
         )
+
+    @staticmethod
+    def multiprotocol_us915(
+        meshtastic_freq_hz: int = 906_875_000,
+        meshtastic_sf: int = 11,
+        meshtastic_bw_khz: int = 250,
+        reticulum_freq_hz: int = 914_875_000,
+        meshcore_freq_hz: int = 910_525_000,
+    ) -> ConcentratorChannelPlan:
+        """Triple-protocol monitoring on US 915 MHz band.
+
+        Channel allocation (8 of 9 demodulators used, 1 spare):
+
+          single-SF       Meshtastic LongFast (250 kHz, SF11)
+          multi-SF[0]     Reticulum            (125 kHz, all SF)
+          multi-SF[1-2]   MeshCore             (125 kHz, all SF)
+          multi-SF[3-6]   Meshtastic monitoring channels
+          multi-SF[7]     spare (disabled)
+
+        radio_0 covers ~906-911 MHz (Meshtastic + MeshCore band).
+        radio_1 covers ~914-915 MHz (Reticulum band) — the 8 MHz
+        spread between MT and RNS exceeds a single RF chain's IF
+        range, so both SX1250 radios are used.
+
+        Sync word constraint:
+          The SX1302 HAL filters one sync word globally. Until the
+          per-channel sync word patch (Step 2) lands, only one
+          protocol's frames pass the demodulator's sync detector
+          at a time. Set ``radio.sync_word`` in local.yaml to
+          choose which protocol's sync word is honored:
+            0x2B  -> Meshtastic + MeshCore captured (Reticulum drops)
+            0x12  -> Reticulum captured (MT + MC drop)
+        """
+        plan = ConcentratorChannelPlan(
+            radio_0_freq_hz=908_500_000,   # center between MT and MC
+            radio_1_freq_hz=reticulum_freq_hz,
+        )
+
+        plan.single_sf_channel = ChannelConfig(
+            frequency_hz=meshtastic_freq_hz,
+            bandwidth_khz=meshtastic_bw_khz,
+            spreading_factor=meshtastic_sf,
+            protocol=Protocol.MESHTASTIC,
+        )
+
+        # multi-SF[0]: Reticulum on radio_1
+        plan.multi_sf_channels.append(ChannelConfig(
+            frequency_hz=reticulum_freq_hz,
+            protocol=Protocol.RETICULUM,
+        ))
+        # multi-SF[1-2]: MeshCore (two slots for redundancy)
+        plan.multi_sf_channels.append(ChannelConfig(
+            frequency_hz=meshcore_freq_hz,
+            protocol=Protocol.MESHCORE,
+        ))
+        plan.multi_sf_channels.append(ChannelConfig(
+            frequency_hz=meshcore_freq_hz,
+            protocol=Protocol.MESHCORE,
+        ))
+        # multi-SF[3-6]: Meshtastic monitoring near LongFast freq
+        for offset in (-300_000, -100_000, 100_000, 300_000):
+            plan.multi_sf_channels.append(ChannelConfig(
+                frequency_hz=meshtastic_freq_hz + offset,
+                protocol=Protocol.MESHTASTIC,
+            ))
+        # multi-SF[7]: spare
+        plan.multi_sf_channels.append(ChannelConfig(
+            frequency_hz=meshtastic_freq_hz,
+            enabled=False,
+            protocol=None,
+        ))
+        return plan
+
+    def protocol_for_if_chain(self, if_chain: int) -> Optional[Protocol]:
+        """Return the protocol tag for packets received on a given IF chain.
+
+        Returns ``None`` when the channel is not protocol-tagged (legacy
+        single-protocol plans) so the caller can fall back to its default
+        protocol_hint.
+        """
+        if if_chain == _SINGLE_SF_IF_CHAIN:
+            return self.single_sf_channel.protocol if self.single_sf_channel else None
+        if 0 <= if_chain < len(self.multi_sf_channels):
+            return self.multi_sf_channels[if_chain].protocol
+        return None
+
+    @property
+    def has_protocol_tags(self) -> bool:
+        """True when at least one channel carries an explicit protocol tag."""
+        if self.single_sf_channel and self.single_sf_channel.protocol is not None:
+            return True
+        return any(ch.protocol is not None for ch in self.multi_sf_channels)
 
     @staticmethod
     def meshtastic_eu868_default() -> ConcentratorChannelPlan:

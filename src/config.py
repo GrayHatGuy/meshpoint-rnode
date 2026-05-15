@@ -95,6 +95,11 @@ class CaptureConfig:
     serial_port: Optional[str] = None
     serial_baud: int = 115200
     concentrator_spi_device: str = "/dev/spidev0.0"
+    # When True, the SX1302 channel plan splits IF channels across
+    # Meshtastic, Reticulum, and MeshCore frequencies and tags each
+    # received packet with the matching protocol via if_chain. See
+    # ConcentratorChannelPlan.multiprotocol_us915 for layout.
+    concentrator_multi_protocol: bool = False
     meshcore_usb: MeshcoreUsbConfig = field(default_factory=MeshcoreUsbConfig)
     rnode_usb: RnodeUsbConfig = field(default_factory=RnodeUsbConfig)
 
