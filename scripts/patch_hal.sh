@@ -116,10 +116,51 @@ TXPATCH
 fi
 
 # ── Step 2: pair-sync + TX-override patch ──────────────────────────────
-if grep -q "sx1302_lora_syncword_pair" "$HAL_SRC"; then
-    info "Step 2 pair-sync patch already applied"
+#
+# Version marker: bump MESHPOINT_STEP2_VER below when the patched code
+# changes substantively so existing installs re-apply the updated patch.
+#
+#   v1  initial pair-sync, TX default = multi-SF sync (BROKE MT TX in
+#       Config A because the MT-on-single-SF use case wants TX at the
+#       single-SF sync word, not the multi-SF (RNS) sync word).
+#   v2  TX default = single-SF sync. MT TX (the common case) works
+#       out of the box; RNS TX (Tier 2) sets per-packet via
+#       sx1302_set_tx_syncword().
+#
+MESHPOINT_STEP2_VER=2
+NEED_STEP2=false
+
+if grep -q "MESHPOINT_STEP2_VER=${MESHPOINT_STEP2_VER}" "$HAL_SRC"; then
+    info "Step 2 pair-sync patch already at v${MESHPOINT_STEP2_VER}"
+elif grep -q "sx1302_lora_syncword_pair" "$HAL_SRC"; then
+    info "Step 2 patch is OLDER than v${MESHPOINT_STEP2_VER}; re-applying..."
+    # Strip the old Meshpoint Step 2 block so the fresh one can be
+    # injected idempotently below. Detected by the leading marker
+    # comment that every version of the block starts with.
+    python3 - "$HAL_SRC" <<'STRIPOLD'
+import re, sys
+from pathlib import Path
+f = Path(sys.argv[1])
+s = f.read_text()
+pattern = re.compile(
+    r'\n/\* .. Meshpoint Step 2 additions .*?'
+    r'\nint sx1302_set_tx_syncword\(uint8_t sw\) \{[^}]*\}\n',
+    re.DOTALL,
+)
+new_s, n = pattern.subn('\n', s, count=1)
+if n:
+    Path(sys.argv[1]).write_text(new_s)
+    print("OK: removed old Step 2 patch block")
+else:
+    print("WARN: could not auto-strip old patch block; fresh apply may no-op")
+STRIPOLD
+    NEED_STEP2=true
 else
-    info "Applying Step 2 pair-sync + TX-override patch..."
+    NEED_STEP2=true
+fi
+
+if [ "$NEED_STEP2" = "true" ]; then
+    info "Applying Step 2 v${MESHPOINT_STEP2_VER} patch..."
     python3 - "$HAL_SRC" <<'STEP2PATCH'
 import sys
 from pathlib import Path
@@ -167,6 +208,7 @@ if end < 0:
 INSERT = """
 
 /* ── Meshpoint Step 2 additions ──────────────────────────────────────
+ * MESHPOINT_STEP2_VER=2
  *
  * sx1302_lora_syncword_pair(): write the multi-SF (SF5/6/7-12) demod
  * group sync word independently of the single-SF (LoRa Service) demod
@@ -183,6 +225,14 @@ INSERT = """
  * sx1302_set_tx_syncword(): update the sx1302_tx_sw_peak1/2 globals
  * that the (already patched) TX path reads from. Call immediately
  * before each lgw_send() to override the sync word for that packet.
+ *
+ * TX default policy (v2): the TX globals are initialised to the
+ * SINGLE-SF sync word, not the multi-SF. Reasoning: on RAK2287 the
+ * vast majority of TX traffic rides the single-SF channel (Meshtastic
+ * LongFast), so defaulting to that protocol's sync word means MT TX
+ * works without any per-packet override. Protocols on the multi-SF
+ * group (e.g. Reticulum TX in Tier 2) must call sx1302_set_tx_syncword()
+ * explicitly per packet.
  */
 
 int sx1302_lora_syncword_pair(uint8_t multi_sf_sw, uint8_t single_sf_sw) {
@@ -192,10 +242,9 @@ int sx1302_lora_syncword_pair(uint8_t multi_sf_sw, uint8_t single_sf_sw) {
     uint8_t single_p1 = ((single_sf_sw >> 4) & 0x0F) * 2;
     uint8_t single_p2 =  (single_sf_sw       & 0x0F) * 2;
 
-    /* Default TX uses the multi-SF sync word; per-packet override via
-     * sx1302_set_tx_syncword() if the caller needs a different value. */
-    sx1302_tx_sw_peak1 = multi_p1;
-    sx1302_tx_sw_peak2 = multi_p2;
+    /* Default TX = single-SF sync (see v2 note above). */
+    sx1302_tx_sw_peak1 = single_p1;
+    sx1302_tx_sw_peak2 = single_p2;
 
     /* Multi-SF demod groups (SF5, SF6, SF7-SF12) all share one sync */
     err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF5_PEAK1_POS_SF5,        multi_p1);

@@ -88,6 +88,20 @@ class TxService:
         if persist_derived_node_id:
             self._persist_derived_node_id_if_needed()
 
+    def _mt_sync_word(self) -> int:
+        """Sync word to use for outbound Meshtastic frames.
+
+        Returns ``radio.sync_word`` from config (default 0x2B). Passed
+        to ``wrapper.send()`` so the per-packet TX sync override is
+        applied immediately before lgw_send -- otherwise Config A's
+        pair-sync leaves the TX globals pointing at the multi-SF
+        protocol's sync word (e.g. 0x42 for RNS) and Meshtastic
+        receivers silently drop our packets.
+        """
+        if self._radio_config is not None:
+            return int(getattr(self._radio_config, "sync_word", 0x2B))
+        return 0x2B
+
     @property
     def meshtastic_enabled(self) -> bool:
         return (
@@ -207,7 +221,9 @@ class TxService:
                 airtime_ms=airtime_ms,
             )
 
-        result_code = await asyncio.to_thread(self._wrapper.send, tx_pkt)
+        result_code = await asyncio.to_thread(
+            self._wrapper.send, tx_pkt, self._mt_sync_word(),
+        )
         if result_code == 0:
             if self._duty:
                 self._duty.record_tx(airtime_ms)
@@ -302,7 +318,9 @@ class TxService:
         pre_status = await asyncio.to_thread(self._wrapper.get_tx_status, 0)
         logger.info("TX status before send: %d", pre_status)
 
-        result_code = await asyncio.to_thread(self._wrapper.send, tx_pkt)
+        result_code = await asyncio.to_thread(
+            self._wrapper.send, tx_pkt, self._mt_sync_word(),
+        )
 
         if result_code == 0:
             for delay in (0.05, 0.1, 0.5, 1.0):

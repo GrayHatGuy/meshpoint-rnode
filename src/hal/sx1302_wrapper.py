@@ -352,21 +352,35 @@ class SX1302Wrapper:
             lut.size, rf_chain,
         )
 
-    def send(self, tx_pkt: LgwPktTxS) -> int:
+    def send(self, tx_pkt: LgwPktTxS, sync_word: Optional[int] = None) -> int:
         """Schedule a packet for transmission via lgw_send.
+
+        When ``sync_word`` is provided the per-packet TX sync override is
+        applied immediately before lgw_send so the outbound frame uses
+        that protocol's sync word (e.g. 0x2B for Meshtastic, 0x42 for
+        Reticulum). Required in Config A multi-protocol mode where the
+        global TX sync default would otherwise be wrong for at least one
+        protocol. Requires Step 2 HAL patch; silently no-ops on un-patched
+        builds (TX still proceeds with whatever sync was last set).
 
         Returns LGW_HAL_SUCCESS (0) on success, negative on error.
         """
         if not self._started:
             raise RuntimeError("Concentrator not started, cannot transmit")
 
+        if sync_word is not None:
+            self.set_tx_syncword(sync_word)
+
         result = self._lib.lgw_send(ctypes.byref(tx_pkt))
         if result != LGW_HAL_SUCCESS:
             logger.error("lgw_send failed (code %d)", result)
         else:
+            sync_tag = (
+                f"  sync=0x{sync_word:02X}" if sync_word is not None else ""
+            )
             logger.info(
-                "TX queued: %d Hz, SF%d, %d bytes",
-                tx_pkt.freq_hz, tx_pkt.datarate, tx_pkt.size,
+                "TX queued: %d Hz, SF%d, %d bytes%s",
+                tx_pkt.freq_hz, tx_pkt.datarate, tx_pkt.size, sync_tag,
             )
         return result
 
