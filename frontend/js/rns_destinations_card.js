@@ -1,11 +1,10 @@
 /**
- * Radio tab - Reticulum Destinations card.
+ * Radio tab - Reticulum Channels card.
  *
- * Reticulum's equivalent of "channels" is the set of LXMF
- * destinations the local node knows about (its own destination,
- * plus any peers it has learned via ANNOUNCE frames). The destination
- * hash is the Reticulum address; the friendly name comes from the
- * peer's identity advertisement.
+ * Titled "Channels" to mirror the Meshtastic Channels card. In
+ * Reticulum terminology these rows are *destinations* (identity
+ * hashes), but presenting them under the "Channels" label keeps the
+ * UI parallel to the MT side and matches operator expectations.
  *
  * Until Tier 2 lands the local destination row is a stub. The peer
  * rows below it are populated from the existing nodes table filtered
@@ -24,7 +23,7 @@ class RnsDestinationsCard {
         rootEl.classList.add('r-card');
         rootEl.innerHTML = `
             <div class="r-card__header">
-                <h3 class="r-card__title">Destinations</h3>
+                <h3 class="r-card__title">Channels</h3>
                 <span class="r-card__subtitle" id="rns-dest-subtitle">
                     -- discovered
                 </span>
@@ -49,10 +48,10 @@ class RnsDestinationsCard {
                         title="Available in Tier 2">+ Add Destination</button>
             </div>
             <p class="r-hint">
-                Destinations are Reticulum's equivalent of channels: each
-                row is an identity hash heard on the air. The local node
-                will appear here once Tier 2 provisions a Reticulum
-                identity for this Meshpoint.
+                Reticulum's "channels" are destinations: each row is an
+                identity hash heard on the air. The local node will appear
+                here once Tier 2 provisions a Reticulum identity for this
+                Meshpoint.
             </p>
         `;
         this._wire();

@@ -111,8 +111,11 @@ class RnsConfigCard {
             : '0x42';
 
         // Decide which physical source is currently capturing RNS.
+        // USB is active either when explicitly listed in sources OR when
+        // auto_detect is on (the server.py auto-detect fallback adds it
+        // even if the user comments rnode_usb out of `sources`).
         const usbActive = sources.includes('rnode_usb')
-            || (rnode.auto_detect !== false && rnode.serial_port);
+            || rnode.auto_detect === true;
         const concActive = multiProto;
         let sourceLabel = 'none';
         if (usbActive && concActive) sourceLabel = 'USB RNode + SX1302';
