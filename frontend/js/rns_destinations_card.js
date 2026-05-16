@@ -74,12 +74,23 @@ class RnsDestinationsCard {
         const localRow = this._renderLocalRow();
 
         try {
-            // Reuse the existing /api/nodes endpoint and filter client-side
-            // to reticulum protocol. Saves a backend route until Tier 2.
-            const res = await fetch('/api/nodes?protocol=reticulum&limit=50');
+            // /api/nodes returns all protocols (the backend's protocol query
+            // param is currently ignored). Filter client-side so this card
+            // only shows Reticulum destinations, not MT/MC nodes.
+            const res = await fetch('/api/nodes?limit=500');
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            const peers = Array.isArray(data) ? data : (data.nodes || []);
+            const all = Array.isArray(data) ? data : (data.nodes || []);
+
+            const peers = all.filter(
+                (n) => (n.protocol || '').toLowerCase() === 'reticulum',
+            );
+            // Sort by most-recently-heard first.
+            peers.sort((a, b) => {
+                const ta = a.last_heard ? Date.parse(a.last_heard) : 0;
+                const tb = b.last_heard ? Date.parse(b.last_heard) : 0;
+                return tb - ta;
+            });
 
             const peerRows = peers.map((n, i) => this._peerRow(n, i + 1)).join('');
             body.innerHTML = localRow + peerRows;
