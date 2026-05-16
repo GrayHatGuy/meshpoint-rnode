@@ -205,8 +205,19 @@ class ConcentratorChannelPlan:
           power users who reverse the sync assignment can flip them on.
 
         ── Architecture ────────────────────────────────────────────────
-          radio_0 = meshtastic_freq_hz (~906.875 MHz)
-          radio_1 = reticulum_freq_hz  (~914.875 MHz)
+          radio_0 = meshtastic_freq_hz - 75 kHz (~906.800 MHz)
+          radio_1 = reticulum_freq_hz          (~914.875 MHz)
+
+          radio_0 is OFFSET 75 kHz BELOW the MT TX frequency on purpose.
+          The SX1250 is a direct-conversion radio; transmitting at the
+          exact LO frequency causes severe LO leakage / DC-offset
+          artefacts that garble the outbound signal so receivers cannot
+          decode it. The 75 kHz offset matches the legacy
+          meshtastic_us915_default plan that has been field-proven for
+          TX. The single-SF demod still listens at the configured MT
+          frequency -- the IF stage handles the 75 kHz offset internally
+          on the RX side.
+
           MeshCore stays on its USB companion (its sync word 0x12
           would need a third filter slot the SX1302 doesn't have).
 
@@ -218,8 +229,9 @@ class ConcentratorChannelPlan:
         word setting.
         """
         plan = ConcentratorChannelPlan(
-            radio_0_freq_hz=meshtastic_freq_hz,    # ~906.875 (MT)
-            radio_1_freq_hz=reticulum_freq_hz,     # ~914.875 (RNS)
+            # radio_0 offset -75 kHz from MT freq to avoid TX-at-DC.
+            radio_0_freq_hz=meshtastic_freq_hz - 75_000,
+            radio_1_freq_hz=reticulum_freq_hz,
             multi_sf_sync_word=reticulum_sync_word,    # 0x42 -> RNS
             single_sf_sync_word=meshtastic_sync_word,  # 0x2B -> MT
         )
